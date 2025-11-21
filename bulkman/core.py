@@ -151,7 +151,11 @@ class Bulkhead:
                     if inspect.iscoroutinefunction(func):
                         result = await func(*args, **kwargs)
                     else:
-                        result = await trio.to_thread.run_sync(func, *args, **kwargs)
+                        # trio.to_thread.run_sync doesn't support **kwargs, so wrap in lambda
+                        if kwargs:
+                            result = await trio.to_thread.run_sync(lambda: func(*args, **kwargs))
+                        else:
+                            result = await trio.to_thread.run_sync(func, *args)
 
                     execution_time = trio.current_time() - start_time
 

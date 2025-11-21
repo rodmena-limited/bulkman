@@ -16,11 +16,13 @@ from bulkman.exceptions import (
     BulkheadTimeoutError,
 )
 from bulkman.state import BulkheadState
+from bulkman.sync_bridge import BulkheadSync
 
-__version__ = "0.1.0"
+__version__ = "1.0.3"
 
 __all__ = [
     "Bulkhead",
+    "BulkheadSync",
     "BulkheadConfig",
     "BulkheadManager",
     "BulkheadState",
