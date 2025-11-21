@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bulkman"
-version = "0.1.0"
+version = "1.0.0"
 description = "Bulkhead pattern implementation with Trio for structured concurrency and resilient circuit breaking"
 readme = "README.md"
 license = {text = "Apache Software License 2.0"}
@@ -45,8 +45,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/farshidashouri/bulkman"
-Repository = "https://github.com/farshidashouri/bulkman"
+Homepage = "https://github.com/rodmena-limited/bulkman"
+Repository = "https://github.com/rodmena-limited/bulkman"
 
 [tool.setuptools.packages.find]
 include = ["bulkman*"]

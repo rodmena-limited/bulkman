@@ -326,7 +326,6 @@ This project is licensed under the Apache Software License 2.0 - see the LICENSE
 
 ## Links
 
-- **GitHub**: [https://github.com/farshidashouri/bulkman](https://github.com/farshidashouri/bulkman)
 - **PyPI**: [https://pypi.org/project/bulkman/](https://pypi.org/project/bulkman/)
 - **Trio Documentation**: [https://trio.readthedocs.io/](https://trio.readthedocs.io/)
 - **resilient-circuit**: [https://github.com/rodmena-limited/resilient-circuit](https://github.com/rodmena-limited/resilient-circuit)
