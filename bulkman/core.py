@@ -134,7 +134,7 @@ class Bulkhead:
         execution_id = str(uuid.uuid4())
 
         # Create timeout scope if needed
-        timeout = self.config.timeout_seconds if self.config.timeout_seconds else float('inf')
+        timeout = self.config.timeout_seconds if self.config.timeout_seconds else float("inf")
 
         with trio.move_on_after(timeout) as cancel_scope:
             async with self._semaphore:

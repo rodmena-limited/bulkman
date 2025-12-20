@@ -24,7 +24,10 @@ Usage:
     result = future.result(timeout=30)  # ExecutionResult
 """
 
+from __future__ import annotations
+
 import concurrent.futures
+import contextvars
 import logging
 import threading
 import time
@@ -58,16 +61,17 @@ class BulkheadThreading:
     more predictable behavior with sync code.
 
     Features:
-    - Concurrency limiting via threading.Semaphore
-    - Queue management via ThreadPoolExecutor
+    - Concurrency limiting via ThreadPoolExecutor size
+    - Queue management via executor internal queue and capacity tracking
     - Circuit breaker integration (same as async version)
     - Execution statistics and metrics
     - Timeout support (returns control, thread continues - Python limitation)
+    - Context propagation (via contextvars) for tracing/logging
 
     Timeout Behavior:
         Python threads cannot be forcibly killed. When a timeout occurs:
         1. Control returns to the caller with TimeoutError
-        2. The thread continues running in the background
+        2. The thread continues running in the background (or aborts if still in queue)
         3. The result is discarded when it eventually completes
 
         This is identical to Trio's behavior for sync code, but without
@@ -108,14 +112,12 @@ class BulkheadThreading:
         self.config = config
         self.name = config.name
 
-        # Concurrency control
-        self._semaphore = threading.Semaphore(config.max_concurrent_calls)
-
         # Thread pool for execution
-        # Size = max_concurrent + queue to allow queueing
-        pool_size = config.max_concurrent_calls + config.max_queue_size
+        # Size = max_concurrent_calls.
+        # Queueing is handled by the executor's internal queue, but we limit
+        # the depth of that queue using _in_flight_count and max_queue_size.
         self._executor = ThreadPoolExecutor(
-            max_workers=pool_size,
+            max_workers=config.max_concurrent_calls,
             thread_name_prefix=f"Bulkhead-{config.name}",
         )
 
@@ -212,8 +214,11 @@ class BulkheadThreading:
                 )
             self._in_flight_count += 1
 
-    def _decrement_in_flight(self) -> None:
-        """Decrement in-flight count after task completes."""
+    def _decrement_in_flight(self, future: Future[ExecutionResult] | None = None) -> None:
+        """Decrement in-flight count after task completes/cancels.
+
+        This is designed to be a Future done_callback.
+        """
         with self._in_flight_lock:
             if self._in_flight_count > 0:
                 self._in_flight_count -= 1
@@ -227,7 +232,7 @@ class BulkheadThreading:
         """Execute a function through the bulkhead.
 
         The function is submitted to a thread pool and executed when a
-        semaphore slot becomes available. Returns a Future that can be
+        thread becomes available. Returns a Future that can be
         awaited with an optional timeout.
 
         Args:
@@ -249,115 +254,133 @@ class BulkheadThreading:
         # Check circuit breaker first
         self._check_circuit()
 
-        # Check queue capacity
-        self._check_queue_capacity()
-
+        # Prepare context and metadata BEFORE checking queue capacity.
+        # This prevents a leak where we increment capacity but then fail to
+        # submit due to an error in uuid/context creation.
         submission_time = time.monotonic()
         execution_id = str(uuid.uuid4())
 
-        def wrapper() -> ExecutionResult:
-            """Wrapper that handles semaphore, timing, and circuit breaker."""
-            semaphore_acquired = False
-            try:
-                # Acquire semaphore for concurrency limiting
-                semaphore_acquired = self._semaphore.acquire(
-                    timeout=self.config.timeout_seconds
-                )
-                if not semaphore_acquired:
-                    # Couldn't acquire semaphore within timeout
-                    with self._stats_lock:
-                        self._timed_out_executions += 1
-                    return ExecutionResult(
-                        success=False,
-                        result=None,
-                        error=BulkheadTimeoutError(
-                            f"Timeout waiting for semaphore in '{self.name}'"
-                        ),
-                        execution_time=time.monotonic() - submission_time,
-                        bulkhead_name=self.name,
-                        queued_time=time.monotonic() - submission_time,
-                        execution_id=execution_id,
-                    )
+        # Capture the current context (for tracing/logging propagation)
+        ctx = contextvars.copy_context()
 
-                start_time = time.monotonic()
-                queued_time = start_time - submission_time
+        # Capture circuit breaker reference to avoid race with shutdown
+        # If shutdown() runs and sets self._circuit_breaker = None, this local
+        # reference keeps the object alive for this execution.
+        circuit_breaker = self._circuit_breaker
+
+        # Check queue capacity (Increments _in_flight_count)
+        self._check_queue_capacity()
+
+        def wrapper() -> ExecutionResult:
+            """Wrapper that handles timing and circuit breaker."""
+
+            # Check if we waited too long in the queue
+            start_time = time.monotonic()
+            queued_time = start_time - submission_time
+
+            if (
+                self.config.timeout_seconds
+                and queued_time > self.config.timeout_seconds
+            ):
+                with self._stats_lock:
+                    self._timed_out_executions += 1
+                return ExecutionResult(
+                    success=False,
+                    result=None,
+                    error=BulkheadTimeoutError(
+                        f"Timeout waiting for execution slot in '{self.name}' "
+                        f"(queued for {queued_time:.2f}s)"
+                    ),
+                    execution_time=0.0,
+                    bulkhead_name=self.name,
+                    queued_time=queued_time,
+                    execution_id=execution_id,
+                )
+
+            with self._stats_lock:
+                self._total_executions += 1
+                self._active_tasks += 1
+
+            try:
+                # Execute the function
+                result = func(*args, **kwargs)
+
+                execution_time = time.monotonic() - start_time
+
+                # Record success in circuit breaker
+                if circuit_breaker:
+                    try:
+                        circuit_breaker._status.mark_success()
+                        circuit_breaker._save_state()
+                    except Exception as e:
+                        logger.warning("Failed to mark circuit success: %s", e)
 
                 with self._stats_lock:
-                    self._total_executions += 1
-                    self._active_tasks += 1
+                    self._successful_executions += 1
+                    self._active_tasks -= 1
 
-                try:
-                    # Execute the function
-                    result = func(*args, **kwargs)
+                return ExecutionResult(
+                    success=True,
+                    result=result,
+                    error=None,
+                    execution_time=execution_time,
+                    bulkhead_name=self.name,
+                    queued_time=queued_time,
+                    execution_id=execution_id,
+                )
 
-                    execution_time = time.monotonic() - start_time
+            except Exception as e:
+                execution_time = time.monotonic() - start_time
 
-                    # Record success in circuit breaker
-                    if self._circuit_breaker:
-                        try:
-                            self._circuit_breaker._status.mark_success()
-                            self._circuit_breaker._save_state()
-                        except Exception as e:
-                            logger.warning("Failed to mark circuit success: %s", e)
+                # Record failure in circuit breaker
+                if circuit_breaker:
+                    try:
+                        circuit_breaker._status.mark_failure()
+                        circuit_breaker._save_state()
+                    except Exception as circuit_err:
+                        logger.warning(
+                            "Failed to mark circuit failure: %s", circuit_err
+                        )
 
-                    with self._stats_lock:
-                        self._successful_executions += 1
-                        self._active_tasks -= 1
+                with self._stats_lock:
+                    self._failed_executions += 1
+                    self._active_tasks -= 1
 
-                    return ExecutionResult(
-                        success=True,
-                        result=result,
-                        error=None,
-                        execution_time=execution_time,
-                        bulkhead_name=self.name,
-                        queued_time=queued_time,
-                        execution_id=execution_id,
-                    )
+                # Wrap exception if needed
+                if not isinstance(e, BulkheadError):
+                    wrapped = BulkheadError(f"Execution failed: {e}")
+                    wrapped.__cause__ = e
+                    error = wrapped
+                else:
+                    error = e
 
-                except Exception as e:
-                    execution_time = time.monotonic() - start_time
+                return ExecutionResult(
+                    success=False,
+                    result=None,
+                    error=error,
+                    execution_time=execution_time,
+                    bulkhead_name=self.name,
+                    queued_time=queued_time,
+                    execution_id=execution_id,
+                )
 
-                    # Record failure in circuit breaker
-                    if self._circuit_breaker:
-                        try:
-                            self._circuit_breaker._status.mark_failure()
-                            self._circuit_breaker._save_state()
-                        except Exception as circuit_err:
-                            logger.warning(
-                                "Failed to mark circuit failure: %s", circuit_err
-                            )
-
-                    with self._stats_lock:
-                        self._failed_executions += 1
-                        self._active_tasks -= 1
-
-                    # Wrap exception if needed
-                    if not isinstance(e, BulkheadError):
-                        wrapped = BulkheadError(f"Execution failed: {e}")
-                        wrapped.__cause__ = e
-                        error = wrapped
-                    else:
-                        error = e
-
-                    return ExecutionResult(
-                        success=False,
-                        result=None,
-                        error=error,
-                        execution_time=execution_time,
-                        bulkhead_name=self.name,
-                        queued_time=queued_time,
-                        execution_id=execution_id,
-                    )
-
-            finally:
-                # Always decrement in-flight count when task completes
-                self._decrement_in_flight()
-                # Release semaphore if we acquired it
-                if semaphore_acquired:
-                    self._semaphore.release()
+        def context_wrapper():
+            """Runs the wrapper inside the captured context."""
+            return ctx.run(wrapper)
 
         # Submit to thread pool
-        return self._executor.submit(wrapper)
+        try:
+            future = self._executor.submit(context_wrapper)
+            # CRITICAL: Ensure in_flight_count is always decremented,
+            # even if the task is cancelled or fails.
+            future.add_done_callback(self._decrement_in_flight)
+            return future
+        except BaseException:
+            # Catch BaseException to include KeyboardInterrupt and SystemExit.
+            # If submission fails, we must decrement the count we incremented
+            # in _check_queue_capacity to prevent permanent leaks.
+            self._decrement_in_flight()
+            raise
 
     def execute_with_timeout(
         self,
@@ -384,15 +407,23 @@ class BulkheadThreading:
             BulkheadFullError: If queue is at capacity
             BulkheadTimeoutError: If execution times out
         """
-        effective_timeout = timeout if timeout is not None else self.config.timeout_seconds
+        effective_timeout = (
+            timeout if timeout is not None else self.config.timeout_seconds
+        )
 
         future = self.execute(func, *args, **kwargs)
 
         try:
             return future.result(timeout=effective_timeout)
         except concurrent.futures.TimeoutError:
+            # Try to cancel the future to stop it from starting if it's queued.
+            # If running, it won't be stopped (Python threading limitation),
+            # but we can at least stop waiting.
+            future.cancel()
+
             with self._stats_lock:
                 self._timed_out_executions += 1
+
             raise BulkheadTimeoutError(
                 f"BulkheadThreading '{self.name}' execution timed out after {effective_timeout}s"
             )
@@ -461,8 +492,15 @@ class BulkheadThreading:
 
         if timeout is not None:
             # Python 3.9+ supports cancel_futures
-            self._executor.shutdown(wait=wait, cancel_futures=not wait)
+            try:
+                self._executor.shutdown(wait=wait, cancel_futures=not wait)
+            except TypeError:
+                # Fallback for older Python versions
+                self._executor.shutdown(wait=wait)
         else:
             self._executor.shutdown(wait=wait)
+
+        # Break potential reference cycles
+        self._circuit_breaker = None
 
         logger.info("BulkheadThreading '%s' shutdown complete", self.name)

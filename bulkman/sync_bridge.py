@@ -164,6 +164,7 @@ class BulkheadSync:
 
     def get_stats(self) -> dict[str, Any]:
         """Get bulkhead statistics."""
+
         async def async_get_stats():
             return await self._bulkhead.get_stats()
 
@@ -171,6 +172,7 @@ class BulkheadSync:
 
     def shutdown(self, wait: bool = True, timeout: float = 5.0) -> None:
         """Shutdown the bulkhead."""
+
         async def async_shutdown():
             if self._bulkhead:
                 await self._bulkhead.shutdown()

@@ -59,6 +59,7 @@ class TestPostgresIntegration:
         # New instance should have the same circuit state from DB (CLOSED)
         state = await bulkhead2.get_state()
         from bulkman import BulkheadState
+
         assert state == BulkheadState.HEALTHY
 
         # Execute another operation through the new instance

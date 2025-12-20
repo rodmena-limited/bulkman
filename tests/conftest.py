@@ -31,6 +31,7 @@ def postgres_storage():
 
     # Clean up any existing state from previous test runs
     import psycopg
+
     try:
         conn_params = {
             "host": os.getenv("RC_DB_HOST"),
@@ -43,8 +44,7 @@ def postgres_storage():
             with conn.cursor() as cur:
                 # Delete all circuit breaker states in our namespace
                 cur.execute(
-                    "DELETE FROM rc_circuit_breakers WHERE namespace = %s",
-                    ("bulkman_test",)
+                    "DELETE FROM rc_circuit_breakers WHERE namespace = %s", ("bulkman_test",)
                 )
             conn.commit()
     except Exception:

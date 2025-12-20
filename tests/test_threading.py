@@ -53,8 +53,9 @@ class TestBulkheadThreadingCreation:
         )
         bulkhead = BulkheadThreading(config)
 
-        # Pool size = max_concurrent + queue_size = 15
-        assert bulkhead._executor._max_workers == 15
+        # Pool size = max_concurrent = 5
+        # Queueing is handled by executor internal queue + in_flight_count check
+        assert bulkhead._executor._max_workers == 5
         bulkhead.shutdown(wait=False)
 
 
@@ -651,7 +652,7 @@ class TestBulkheadThreadingIntegration:
         failures = [r for r in results if not r.success]
 
         assert len(successes) == 5  # 0, 2, 4, 6, 8
-        assert len(failures) == 5   # 1, 3, 5, 7, 9
+        assert len(failures) == 5  # 1, 3, 5, 7, 9
         bulkhead.shutdown(wait=False)
 
 

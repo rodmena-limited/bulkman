@@ -186,7 +186,9 @@ class TestBulkheadCircuitBreaker:
         assert "state" in stats
         assert stats["state"] == "healthy"
 
-    @pytest.mark.skip("Circuit breaker state machine behavior is complex - manual testing recommended")
+    @pytest.mark.skip(
+        "Circuit breaker state machine behavior is complex - manual testing recommended"
+    )
     async def test_circuit_breaker_opens_on_failures(self):
         """Test circuit breaker opens after threshold failures."""
         config = BulkheadConfig(
@@ -216,7 +218,9 @@ class TestBulkheadCircuitBreaker:
         state = await bulkhead.get_state()
         assert state == BulkheadState.ISOLATED
 
-    @pytest.mark.skip("Circuit breaker state machine behavior is complex - manual testing recommended")
+    @pytest.mark.skip(
+        "Circuit breaker state machine behavior is complex - manual testing recommended"
+    )
     async def test_circuit_breaker_half_open_after_cooldown(self):
         """Test circuit breaker transitions to half-open after cooldown."""
         config = BulkheadConfig(
@@ -253,7 +257,9 @@ class TestBulkheadCircuitBreaker:
         # The execution should be allowed (either success or failure based on function)
         assert result is not None
 
-    @pytest.mark.skip("Circuit breaker state machine behavior is complex - manual testing recommended")
+    @pytest.mark.skip(
+        "Circuit breaker state machine behavior is complex - manual testing recommended"
+    )
     async def test_circuit_breaker_closes_on_success(self):
         """Test circuit breaker closes after successful executions."""
         config = BulkheadConfig(
