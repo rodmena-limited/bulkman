@@ -28,7 +28,7 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = [
     "trio>=0.22.0",
-    "resilient-circuit[postgres]>=0.4.1",
+    "resilient-circuit[postgres]>=0.4.6",
 ]
 
 [project.optional-dependencies]
