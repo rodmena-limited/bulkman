@@ -1,14 +1,17 @@
 """Tests for PostgreSQL integration with circuit breaker."""
 
-import os
+from __future__ import annotations
 
-from bulkman import Bulkhead, BulkheadConfig
+import os
+from typing import Any
+
+from bulkman import Bulkhead, BulkheadConfig, BulkheadState
 
 
 class TestPostgresIntegration:
     """Test PostgreSQL circuit breaker persistence."""
 
-    async def test_circuit_breaker_postgres_storage(self, postgres_storage):
+    async def test_circuit_breaker_postgres_storage(self, postgres_storage: Any) -> None:
         """Test circuit breaker state is persisted to PostgreSQL."""
         config = BulkheadConfig(
             name="postgres_test_bulkhead",
@@ -33,7 +36,7 @@ class TestPostgresIntegration:
         assert db_state is not None
         assert db_state["state"] == "CLOSED"
 
-    async def test_circuit_state_persistence_across_instances(self, postgres_storage):
+    async def test_circuit_state_persistence_across_instances(self, postgres_storage: Any) -> None:
         """Test circuit state persists across different bulkhead instances."""
         config = BulkheadConfig(
             name="persistence_test",
@@ -58,15 +61,13 @@ class TestPostgresIntegration:
 
         # New instance should have the same circuit state from DB (CLOSED)
         state = await bulkhead2.get_state()
-        from bulkman import BulkheadState
-
         assert state == BulkheadState.HEALTHY
 
         # Execute another operation through the new instance
         result2 = await bulkhead2.execute(lambda: "success2")
         assert result2.success is True
 
-    async def test_multiple_bulkheads_isolated_storage(self, postgres_storage):
+    async def test_multiple_bulkheads_isolated_storage(self, postgres_storage: Any) -> None:
         """Test multiple bulkheads have isolated storage."""
         config1 = BulkheadConfig(name="bulkhead_1", circuit_breaker_enabled=True)
         config2 = BulkheadConfig(name="bulkhead_2", circuit_breaker_enabled=True)
@@ -91,11 +92,11 @@ class TestPostgresIntegration:
         assert state1["state"] == "CLOSED"
         assert state2["state"] == "CLOSED"
 
-    async def test_postgres_connection_details(self):
-        """Verify PostgreSQL connection is using correct database."""
-
-        assert os.getenv("RC_DB_HOST") == "localhost"
-        assert os.getenv("RC_DB_PORT") == "5432"
+    async def test_postgres_connection_details(self, postgres_storage: Any) -> None:
+        """Verify PostgreSQL connection is using correct database (from testcontainer)."""
+        # With testcontainers, env vars are set by the fixture
+        assert os.getenv("RC_DB_HOST") is not None
+        assert os.getenv("RC_DB_PORT") is not None
         assert os.getenv("RC_DB_NAME") == "bulkman_test_resilient_circuit_db"
         assert os.getenv("RC_DB_USER") == "postgres"
         assert os.getenv("RC_DB_PASSWORD") == "postgres"

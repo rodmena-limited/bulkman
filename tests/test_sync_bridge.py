@@ -1,5 +1,7 @@
 """Tests for synchronous bridge functionality."""
 
+from __future__ import annotations
+
 import concurrent.futures
 import time
 
@@ -55,7 +57,7 @@ class TestTrioThread:
         thread = TrioThread()
         thread.start()
 
-        async def async_add(a, b):
+        async def async_add(a: int, b: int) -> int:
             return a + b
 
         result = thread.run_sync(async_add, 2, 3)
@@ -97,7 +99,7 @@ class TestBulkheadSync:
         config = BulkheadConfig(name="test_sync", circuit_breaker_enabled=False)
         bulkhead = BulkheadSync(config)
 
-        def add(x, y):
+        def add(x: int, y: int) -> int:
             return x + y
 
         future = bulkhead.execute(add, 10, 20)
@@ -114,7 +116,7 @@ class TestBulkheadSync:
         config = BulkheadConfig(name="test_sync", circuit_breaker_enabled=False)
         bulkhead = BulkheadSync(config)
 
-        async def async_multiply(x, y):
+        async def async_multiply(x: int, y: int) -> int:
             await trio.sleep(0.01)
             return x * y
 
@@ -148,7 +150,7 @@ class TestBulkheadSync:
         )
         bulkhead = BulkheadSync(config)
 
-        def slow_func(n):
+        def slow_func(n: int) -> int:
             time.sleep(0.1)
             return n * 2
 
@@ -169,10 +171,10 @@ class TestBulkheadSync:
 
         # Execute some operations
         future1 = bulkhead.execute(lambda: 42)
-        future1.result(timeout=5.0)
+        _ = future1.result(timeout=5.0)
 
         future2 = bulkhead.execute(lambda: 1 / 0)
-        future2.result(timeout=5.0)
+        _ = future2.result(timeout=5.0)
 
         stats = bulkhead.get_stats()
         assert stats["name"] == "test_sync"
@@ -199,7 +201,7 @@ class TestBulkheadSync:
 
         # Should timeout
         with pytest.raises(BulkheadError):  # Will raise timeout or bulkhead error
-            future.result(timeout=5.0)
+            _ = future.result(timeout=5.0)
 
     def test_bulkhead_sync_concurrent_limit(self):
         """Test bulkhead limits concurrent executions."""
@@ -212,9 +214,9 @@ class TestBulkheadSync:
         )
         bulkhead = BulkheadSync(config)
 
-        execution_times = []
+        execution_times: list[float] = []
 
-        async def timed_func(n):
+        async def timed_func(n: int) -> int:
             start = time.time()
             await trio.sleep(0.1)
             duration = time.time() - start
@@ -276,11 +278,15 @@ class TestSyncBridgeIntegration:
         config = BulkheadConfig(name="thread_test", circuit_breaker_enabled=False)
         bulkhead = BulkheadSync(config)
 
-        results = []
+        results: list[int] = []
 
-        def worker(n):
-            future = bulkhead.execute(lambda x: x * 2, n)
+        def double(x: int) -> int:
+            return x * 2
+
+        def worker(n: int) -> None:
+            future = bulkhead.execute(double, n)
             result = future.result(timeout=5.0)
+            assert isinstance(result.result, int)
             results.append(result.result)
 
         threads = [threading.Thread(target=worker, args=(i,)) for i in range(5)]
@@ -317,15 +323,18 @@ class TestSyncBridgeIntegration:
         config = BulkheadConfig(name="stats_test", circuit_breaker_enabled=False)
         bulkhead = BulkheadSync(config)
 
+        def identity(x: int) -> int:
+            return x
+
         # Execute successful operations
         for i in range(3):
-            future = bulkhead.execute(lambda x: x, i)
-            future.result(timeout=5.0)
+            future = bulkhead.execute(identity, i)
+            _ = future.result(timeout=5.0)
 
         # Execute failing operations
-        for _ in range(2):
+        for _idx in range(2):
             future = bulkhead.execute(lambda: 1 / 0)
-            future.result(timeout=5.0)
+            _ = future.result(timeout=5.0)
 
         stats = bulkhead.get_stats()
         assert stats["total_executions"] == 5

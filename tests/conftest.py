@@ -1,50 +1,88 @@
 """Pytest configuration for bulkman tests."""
 
-import os
-from pathlib import Path
+from __future__ import annotations
 
+from collections.abc import Generator
+from typing import Any
+
+import psycopg
 import pytest
-from dotenv import load_dotenv
 from resilient_circuit.storage import create_storage
-
-# Load test environment variables
-test_env = Path(__file__).parent.parent / "test.env"
-if test_env.exists():
-    load_dotenv(test_env)
+from testcontainers.postgres import PostgresContainer  # pyright: ignore[reportMissingTypeStubs]
 
 
 @pytest.fixture
-def anyio_backend():
+def anyio_backend() -> str:
     """Use trio as the async backend for pytest-trio."""
     return "trio"
 
 
+@pytest.fixture(scope="session")
+def postgres_container() -> Generator[PostgresContainer, None, None]:
+    """Start a PostgreSQL container for the test session."""
+    with PostgresContainer(
+        image="postgres:16-alpine",
+        username="postgres",
+        password="postgres",
+        dbname="bulkman_test_resilient_circuit_db",
+        driver=None,
+    ) as container:
+        yield container
+
+
 @pytest.fixture
-def postgres_storage():
-    """Create PostgreSQL storage for circuit breaker tests."""
-    # Check if PostgreSQL env vars are set
-    if not os.getenv("RC_DB_HOST"):
-        pytest.skip("PostgreSQL not configured (missing RC_DB_* environment variables)")
+def postgres_connection_params(postgres_container: PostgresContainer) -> dict[str, Any]:
+    """Get connection parameters for the PostgreSQL container."""
+    host = postgres_container.get_container_host_ip()
+    port = postgres_container.get_exposed_port(5432)
+    return {
+        "host": host,
+        "port": str(port),
+        "dbname": "bulkman_test_resilient_circuit_db",
+        "user": "postgres",
+        "password": "postgres",
+    }
+
+
+@pytest.fixture
+def postgres_storage(
+    postgres_connection_params: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> Any:
+    """Create PostgreSQL storage for circuit breaker tests.
+
+    Sets RC_DB_* environment variables so resilient_circuit can connect,
+    then creates storage and cleans up previous test state.
+    """
+    host = str(postgres_connection_params["host"])
+    port = str(postgres_connection_params["port"])
+    dbname = str(postgres_connection_params["dbname"])
+    user = str(postgres_connection_params["user"])
+    password = str(postgres_connection_params["password"])
+
+    monkeypatch.setenv("RC_DB_HOST", host)
+    monkeypatch.setenv("RC_DB_PORT", port)
+    monkeypatch.setenv("RC_DB_NAME", dbname)
+    monkeypatch.setenv("RC_DB_USER", user)
+    monkeypatch.setenv("RC_DB_PASSWORD", password)
 
     # Create storage with namespace
     storage = create_storage(namespace="bulkman_test")
 
     # Clean up any existing state from previous test runs
-    import psycopg
-
+    conn_params: dict[str, Any] = {
+        "host": host,
+        "port": int(port),
+        "dbname": dbname,
+        "user": user,
+        "password": password,
+    }
     try:
-        conn_params = {
-            "host": os.getenv("RC_DB_HOST"),
-            "port": os.getenv("RC_DB_PORT"),
-            "dbname": os.getenv("RC_DB_NAME"),
-            "user": os.getenv("RC_DB_USER"),
-            "password": os.getenv("RC_DB_PASSWORD"),
-        }
         with psycopg.connect(**conn_params) as conn:
             with conn.cursor() as cur:
-                # Delete all circuit breaker states in our namespace
-                cur.execute(
-                    "DELETE FROM rc_circuit_breakers WHERE namespace = %s", ("bulkman_test",)
+                _ = cur.execute(
+                    "DELETE FROM rc_circuit_breakers WHERE namespace = %s",
+                    ("bulkman_test",),
                 )
             conn.commit()
     except Exception:

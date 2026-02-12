@@ -32,8 +32,8 @@ class TestBulkheadThreadingLeak:
         # Event to keep the worker busy
         worker_hold = threading.Event()
 
-        def blocking_func():
-            worker_hold.wait(timeout=5.0)
+        def blocking_func() -> str:
+            _ = worker_hold.wait(timeout=5.0)
             return "done"
 
         # 1. Fill capacity
@@ -52,7 +52,7 @@ class TestBulkheadThreadingLeak:
 
         # 2. Verify rejection
         with pytest.raises(BulkheadFullError):
-            bulkhead.execute(lambda: "rejected")
+            _ = bulkhead.execute(lambda: "rejected")
 
         # 3. Cancel the queued task (Task B)
         cancelled = future_b.cancel()
@@ -77,7 +77,7 @@ class TestBulkheadThreadingLeak:
         assert result.success is True
 
         # Ensure Task A also finished cleanly
-        future_a.result(timeout=1.0)
+        _ = future_a.result(timeout=1.0)
         bulkhead.shutdown(wait=False)
 
     def test_executor_shutdown_cleanup(self):
@@ -92,7 +92,7 @@ class TestBulkheadThreadingLeak:
 
         worker_hold = threading.Event()
 
-        bulkhead.execute(lambda: worker_hold.wait(timeout=1.0))
+        _ = bulkhead.execute(lambda: worker_hold.wait(timeout=1.0))
 
         # Force shutdown without waiting
         bulkhead.shutdown(wait=False)

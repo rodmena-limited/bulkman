@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bulkman"
-version = "1.2.0"
+version = "1.2.1"
 description = "Bulkhead pattern implementation with Trio for structured concurrency and resilient circuit breaking"
 readme = "README.md"
 license = "Apache-2.0"
@@ -41,6 +41,9 @@ dev = [
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.0.0",
     "ruff>=0.1.0",
+    "testcontainers[postgres]>=4.0.0",
+    "psycopg[binary]>=3.0.0",
+    "basedpyright>=1.0.0",
 ]
 
 [project.urls]
@@ -107,12 +110,20 @@ python_functions = ["test_*"]
 trio_mode = true
 
 [tool.mypy]
-python_version = "3.9"
-check_untyped_defs = true
+python_version = "3.12"
+strict = true
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unused_configs = true
+
+[tool.basedpyright]
+pythonVersion = "3.12"
+exclude = ["bulkhead.py", ".venv"]
+reportExplicitAny = false
+reportAny = false
+reportPrivateUsage = false
+reportUnusedParameter = false
 
 [tool.coverage.run]
 source = ["bulkman"]

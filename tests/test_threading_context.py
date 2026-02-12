@@ -49,7 +49,7 @@ class TestBulkheadThreadingContext:
                 # Verify initial value
                 initial = test_ctx_var.get()
                 # Modify in worker
-                test_ctx_var.set("worker_value")
+                _ = test_ctx_var.set("worker_value")
                 return initial, test_ctx_var.get()
 
             future = bulkhead.execute(modify_context)

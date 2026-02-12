@@ -11,6 +11,7 @@ from bulkman import (
     BulkheadState,
     BulkheadTimeoutError,
 )
+from bulkman.config import ExecutionResult
 
 
 class TestBulkheadBasics:
@@ -108,7 +109,7 @@ class TestBulkheadBasics:
             return "done"
 
         with pytest.raises(BulkheadTimeoutError):
-            await bulkhead.execute(slow_func)
+            _ = await bulkhead.execute(slow_func)
 
     async def test_bulkhead_stats(self):
         """Test bulkhead statistics tracking."""
@@ -116,10 +117,10 @@ class TestBulkheadBasics:
         bulkhead = Bulkhead(config)
 
         # Successful execution
-        await bulkhead.execute(lambda: 42)
+        _ = await bulkhead.execute(lambda: 42)
 
         # Failed execution
-        await bulkhead.execute(lambda: 1 / 0)
+        _ = await bulkhead.execute(lambda: 1 / 0)
 
         stats = await bulkhead.get_stats()
         assert stats["name"] == "test"
@@ -133,7 +134,7 @@ class TestBulkheadBasics:
         config = BulkheadConfig(name="test", circuit_breaker_enabled=False)
         bulkhead = Bulkhead(config)
 
-        await bulkhead.execute(lambda: 42)
+        _ = await bulkhead.execute(lambda: 42)
         await bulkhead.reset_stats()
 
         stats = await bulkhead.get_stats()
@@ -212,7 +213,7 @@ class TestBulkheadCircuitBreaker:
 
         # Circuit should be open now - next request should be rejected
         with pytest.raises(BulkheadCircuitOpenError):
-            await bulkhead.execute(failing_func)
+            _ = await bulkhead.execute(failing_func)
 
         # Verify state is ISOLATED
         state = await bulkhead.get_state()
@@ -246,7 +247,7 @@ class TestBulkheadCircuitBreaker:
 
         # Verify requests are blocked
         with pytest.raises(BulkheadCircuitOpenError):
-            await bulkhead.execute(failing_func)
+            _ = await bulkhead.execute(failing_func)
 
         # Wait for cooldown period
         await trio.sleep(0.25)
@@ -279,7 +280,7 @@ class TestBulkheadCircuitBreaker:
 
         # Verify circuit is open
         with pytest.raises(BulkheadCircuitOpenError):
-            await bulkhead.execute(lambda: 42)
+            _ = await bulkhead.execute(lambda: 42)
 
         # Wait for cooldown period
         await trio.sleep(0.25)
@@ -311,9 +312,9 @@ class TestBulkheadConcurrency:
             await trio.sleep(0.01)
             return n * 2
 
-        results = []
+        results: list[ExecutionResult] = []
 
-        async def execute_and_collect(i: int):
+        async def execute_and_collect(i: int) -> None:
             result = await bulkhead.execute(task, i)
             results.append(result)
 
@@ -337,7 +338,7 @@ class TestBulkheadConcurrency:
             raise ValueError("Error")
 
         # First failing execution
-        await bulkhead.execute(failing_func)
+        _ = await bulkhead.execute(failing_func)
 
         # Semaphore should be released, allowing next execution
         result = await bulkhead.execute(lambda: 42)

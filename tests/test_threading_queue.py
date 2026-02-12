@@ -40,7 +40,7 @@ class TestBulkheadThreadingQueue:
         future2 = bulkhead.execute(queued_func)
 
         # Wait for both
-        future1.result(timeout=1.0)
+        _ = future1.result(timeout=1.0)
         result2 = future2.result(timeout=1.0)
 
         # Verify second task failed with timeout
@@ -68,7 +68,7 @@ class TestBulkheadThreadingQueue:
 
         # Try to submit - should fail (RuntimeError from executor)
         with pytest.raises(RuntimeError):
-            bulkhead.execute(lambda: None)
+            _ = bulkhead.execute(lambda: None)
 
         # Verify in_flight_count is back to 0
         with bulkhead._in_flight_lock:

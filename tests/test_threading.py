@@ -1,5 +1,7 @@
 """Tests for pure threading-based bulkhead implementation."""
 
+from __future__ import annotations
+
 import concurrent.futures
 import threading
 import time
@@ -67,7 +69,7 @@ class TestBulkheadThreadingExecution:
         config = BulkheadConfig(name="test_exec", circuit_breaker_enabled=False)
         bulkhead = BulkheadThreading(config)
 
-        def add(x, y):
+        def add(x: int, y: int) -> int:
             return x + y
 
         future = bulkhead.execute(add, 10, 20)
@@ -85,7 +87,7 @@ class TestBulkheadThreadingExecution:
         config = BulkheadConfig(name="test_kwargs", circuit_breaker_enabled=False)
         bulkhead = BulkheadThreading(config)
 
-        def greet(name, greeting="Hello"):
+        def greet(name: str, greeting: str = "Hello") -> str:
             return f"{greeting}, {name}!"
 
         future = bulkhead.execute(greet, "World", greeting="Hi")
@@ -121,7 +123,7 @@ class TestBulkheadThreadingExecution:
         )
         bulkhead = BulkheadThreading(config)
 
-        def slow_func(n):
+        def slow_func(n: int) -> int:
             time.sleep(0.05)
             return n * 2
 
@@ -192,7 +194,7 @@ class TestBulkheadThreadingTimeout:
             return "slow"
 
         with pytest.raises(BulkheadTimeoutError) as exc_info:
-            bulkhead.execute_with_timeout(slow_func, timeout=0.1)
+            _ = bulkhead.execute_with_timeout(slow_func, timeout=0.1)
 
         assert "timed out" in str(exc_info.value).lower()
         bulkhead.shutdown(wait=False)
@@ -211,7 +213,7 @@ class TestBulkheadThreadingTimeout:
             return "slow"
 
         with pytest.raises(BulkheadTimeoutError):
-            bulkhead.execute_with_timeout(slow_func)  # No explicit timeout
+            _ = bulkhead.execute_with_timeout(slow_func)  # No explicit timeout
 
         bulkhead.shutdown(wait=False)
 
@@ -233,7 +235,7 @@ class TestBulkheadThreadingConcurrencyControl:
         max_concurrent_seen = 0
         lock = threading.Lock()
 
-        def track_concurrency(n):
+        def track_concurrency(n: int) -> int:
             nonlocal concurrent_count, max_concurrent_seen
             with lock:
                 concurrent_count += 1
@@ -271,8 +273,8 @@ class TestBulkheadThreadingConcurrencyControl:
         # Use an event to hold tasks from completing
         hold_event = threading.Event()
 
-        def blocking_func():
-            hold_event.wait(timeout=10.0)
+        def blocking_func() -> str:
+            _ = hold_event.wait(timeout=10.0)
             return "done"
 
         # Submit first task
@@ -285,14 +287,14 @@ class TestBulkheadThreadingConcurrencyControl:
 
         # Try to submit third task - should be rejected (at capacity)
         with pytest.raises(BulkheadFullError):
-            bulkhead.execute(blocking_func)
+            _ = bulkhead.execute(blocking_func)
 
         # Release the hold so tasks can complete
         hold_event.set()
 
         # Clean up
-        future1.result(timeout=5.0)
-        future2.result(timeout=5.0)
+        _ = future1.result(timeout=5.0)
+        _ = future2.result(timeout=5.0)
         bulkhead.shutdown(wait=False)
 
 
@@ -320,9 +322,12 @@ class TestBulkheadThreadingStats:
         config = BulkheadConfig(name="test_stats", circuit_breaker_enabled=False)
         bulkhead = BulkheadThreading(config)
 
+        def double(x: int) -> int:
+            return x * 2
+
         for i in range(3):
-            future = bulkhead.execute(lambda x: x * 2, i)
-            future.result(timeout=5.0)
+            future = bulkhead.execute(double, i)
+            _ = future.result(timeout=5.0)
 
         stats = bulkhead.get_stats()
         assert stats["total_executions"] == 3
@@ -335,15 +340,18 @@ class TestBulkheadThreadingStats:
         config = BulkheadConfig(name="test_stats", circuit_breaker_enabled=False)
         bulkhead = BulkheadThreading(config)
 
+        def identity(x: int) -> int:
+            return x
+
         # Execute successful operations
         for i in range(3):
-            future = bulkhead.execute(lambda x: x, i)
-            future.result(timeout=5.0)
+            future = bulkhead.execute(identity, i)
+            _ = future.result(timeout=5.0)
 
         # Execute failing operations
-        for _ in range(2):
+        for _idx in range(2):
             future = bulkhead.execute(lambda: 1 / 0)
-            future.result(timeout=5.0)
+            _ = future.result(timeout=5.0)
 
         stats = bulkhead.get_stats()
         assert stats["total_executions"] == 5
@@ -356,10 +364,13 @@ class TestBulkheadThreadingStats:
         config = BulkheadConfig(name="test_stats", circuit_breaker_enabled=False)
         bulkhead = BulkheadThreading(config)
 
+        def identity(x: int) -> int:
+            return x
+
         # Execute some operations
         for i in range(5):
-            future = bulkhead.execute(lambda x: x, i)
-            future.result(timeout=5.0)
+            future = bulkhead.execute(identity, i)
+            _ = future.result(timeout=5.0)
 
         bulkhead.reset_stats()
         stats = bulkhead.get_stats()
@@ -403,7 +414,7 @@ class TestBulkheadThreadingCircuitBreaker:
 
         # Next call should be rejected
         with pytest.raises(BulkheadCircuitOpenError):
-            bulkhead.execute(lambda: "should fail")
+            _ = bulkhead.execute(lambda: "should fail")
 
         bulkhead.shutdown(wait=False)
 
@@ -521,9 +532,9 @@ class TestBulkheadThreadingShutdown:
         config = BulkheadConfig(name="test_shutdown", circuit_breaker_enabled=False)
         bulkhead = BulkheadThreading(config)
 
-        completed = []
+        completed: list[bool] = []
 
-        def slow_func():
+        def slow_func() -> str:
             time.sleep(0.2)
             completed.append(True)
             return "done"
@@ -568,12 +579,16 @@ class TestBulkheadThreadingIntegration:
         )
         bulkhead = BulkheadThreading(config)
 
-        results = []
+        results: list[int] = []
         lock = threading.Lock()
 
-        def worker(n):
-            future = bulkhead.execute(lambda x: x * 2, n)
+        def double(x: int) -> int:
+            return x * 2
+
+        def worker(n: int) -> None:
+            future = bulkhead.execute(double, n)
             result = future.result(timeout=5.0)
+            assert isinstance(result.result, int)
             with lock:
                 results.append(result.result)
 
@@ -620,7 +635,7 @@ class TestBulkheadThreadingIntegration:
         )
         bulkhead = BulkheadThreading(config)
 
-        def fast_func(n):
+        def fast_func(n: int) -> int:
             return n * 2
 
         # Submit many tasks rapidly
@@ -639,7 +654,7 @@ class TestBulkheadThreadingIntegration:
         config = BulkheadConfig(name="mixed", circuit_breaker_enabled=False)
         bulkhead = BulkheadThreading(config)
 
-        def maybe_fail(n):
+        def maybe_fail(n: int) -> int:
             if n % 2 == 0:
                 return n * 2
             else:
