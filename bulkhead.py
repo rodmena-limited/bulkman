@@ -268,7 +268,7 @@ class Bulkhead:
                 except queue.Empty:
                     continue
                 except Exception as e:
-                    logger.error(f"Worker thread error in bulkhead '{self.name}': {e}")
+                    logger.error("Worker thread error in bulkhead '%s': %s", self.name, e)
                     # Brief pause to prevent tight error loops
                     time.sleep(0.1)
 
@@ -646,7 +646,7 @@ class Bulkhead:
 
     def shutdown(self, timeout: float = 5.0) -> None:
         """Shutdown the bulkhead and all worker threads gracefully"""
-        logger.info(f"Shutting down bulkhead '{self.name}'")
+        logger.info("Shutting down bulkhead '%s'", self.name)
         self._stop_event.set()
 
         # Put poison pills for workers
@@ -687,7 +687,7 @@ class Bulkhead:
                         ),
                     )
 
-        logger.info(f"Bulkhead '{self.name}' shutdown complete")
+        logger.info("Bulkhead '%s' shutdown complete", self.name)
 
 
 class BulkheadManager:
@@ -757,10 +757,10 @@ class BulkheadManager:
             self._shutdown = True
             for name, bulkhead in self._bulkheads.items():
                 try:
-                    logger.info(f"Shutting down bulkhead '{name}'")
+                    logger.info("Shutting down bulkhead '%s'", name)
                     bulkhead.shutdown(timeout)
                 except Exception as e:
-                    logger.error(f"Error shutting down bulkhead '{name}': {e}")
+                    logger.error("Error shutting down bulkhead '%s': %s", name, e)
 
             # Clear the dictionary
             self._bulkheads.clear()
