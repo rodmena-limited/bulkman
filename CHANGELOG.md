@@ -2,6 +2,16 @@
 
 All notable changes to bulkman are documented here.
 
+## [2.0.1] - 2026-08-03
+
+### Fixed
+
+- Post-shutdown `execute()` now raises a typed `BulkheadShutdownError(BulkheadError)`
+  instead of the executor's bare `RuntimeError`, in all three implementations
+  (async `Bulkhead`, `BulkheadThreading`, `BulkheadSync`) — including the
+  shutdown-race path. Callers can now classify "bulkhead is shut down" as a
+  retryable condition, distinct from a `RuntimeError` raised by the task itself.
+
 ## [2.0.0] - 2026-08-03
 
 ### Breaking changes
@@ -55,4 +65,5 @@ All notable changes to bulkman are documented here.
 - `audit/evaluations/` contains the reusable probe/fuzz harness (17 probes).
 - EARS specs for each audit round live in `SPECS/`.
 
+[2.0.1]: https://github.com/rodmena-limited/bulkman/releases/tag/v2.0.1
 [2.0.0]: https://github.com/rodmena-limited/bulkman/releases/tag/v2.0.0

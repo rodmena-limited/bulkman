@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bulkman"
-version = "2.0.0"
+version = "2.0.1"
 description = "Bulkhead pattern implementation with AnyIO (asyncio) and resilient circuit breaking"
 readme = "README.md"
 license = "Apache-2.0"
