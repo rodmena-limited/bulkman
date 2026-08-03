@@ -16,7 +16,8 @@ class TestBulkheadConfig:
         assert config.failure_threshold == 5
         assert config.success_threshold == 3
         assert config.isolation_duration == 30.0
-        assert config.circuit_breaker_enabled is True
+        # Circuit breaker is disabled by default (opt-in feature)
+        assert config.circuit_breaker_enabled is False
         assert config.health_check_interval == 5.0
 
     def test_config_custom_values(self):
