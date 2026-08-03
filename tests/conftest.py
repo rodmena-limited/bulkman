@@ -1,7 +1,10 @@
 """Pytest configuration for bulkman tests."""
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 from dotenv import load_dotenv
@@ -14,13 +17,51 @@ if test_env.exists():
 
 
 @pytest.fixture
-def anyio_backend():
+def anyio_backend() -> str:
     """Use asyncio as the async backend (pytest-anyio)."""
     return "asyncio"
 
 
+@pytest.fixture
+def postgres_connection_params() -> dict[str, Any]:
+    """Connection parameters for the test PostgreSQL (from test.env / CI service)."""
+    if not os.getenv("RC_DB_HOST"):
+        pytest.skip("PostgreSQL not configured (missing RC_DB_* environment variables)")
+    return {
+        "host": os.getenv("RC_DB_HOST"),
+        "port": os.getenv("RC_DB_PORT", "5432"),
+        "dbname": os.getenv("RC_DB_NAME"),
+        "user": os.getenv("RC_DB_USER"),
+        "password": os.getenv("RC_DB_PASSWORD"),
+    }
+
+
+@pytest.fixture
+def postgres_storage(postgres_connection_params: dict[str, Any]) -> Any:
+    """Create PostgreSQL storage for circuit breaker tests."""
+    # Create storage with namespace
+    storage = create_storage(namespace="bulkman_test")
+
+    # Clean up any existing state from previous test runs
+    import psycopg
+
+    try:
+        with psycopg.connect(**postgres_connection_params) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM rc_circuit_breakers WHERE namespace = %s",
+                    ("bulkman_test",),
+                )
+            conn.commit()
+    except Exception:
+        # Table might not exist yet, that's okay
+        pass
+
+    return storage
+
+
 @pytest.fixture(autouse=True)
-def _clean_default_circuit_state():
+def _clean_default_circuit_state() -> Any:
     """Isolate circuit-breaker tests from each other.
 
     Bulkheads built without an explicit storage use resilient_circuit's
@@ -49,38 +90,3 @@ def _clean_default_circuit_state():
     except Exception:
         pass
     yield
-
-
-@pytest.fixture
-def postgres_storage():
-    """Create PostgreSQL storage for circuit breaker tests."""
-    # Check if PostgreSQL env vars are set
-    if not os.getenv("RC_DB_HOST"):
-        pytest.skip("PostgreSQL not configured (missing RC_DB_* environment variables)")
-
-    # Create storage with namespace
-    storage = create_storage(namespace="bulkman_test")
-
-    # Clean up any existing state from previous test runs
-    import psycopg
-
-    try:
-        conn_params = {
-            "host": os.getenv("RC_DB_HOST"),
-            "port": os.getenv("RC_DB_PORT"),
-            "dbname": os.getenv("RC_DB_NAME"),
-            "user": os.getenv("RC_DB_USER"),
-            "password": os.getenv("RC_DB_PASSWORD"),
-        }
-        with psycopg.connect(**conn_params) as conn:
-            with conn.cursor() as cur:
-                # Delete all circuit breaker states in our namespace
-                cur.execute(
-                    "DELETE FROM rc_circuit_breakers WHERE namespace = %s", ("bulkman_test",)
-                )
-            conn.commit()
-    except Exception:
-        # Table might not exist yet, that's okay
-        pass
-
-    return storage
