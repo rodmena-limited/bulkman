@@ -11,10 +11,10 @@ For development with all dependencies:
 pip install bulkman[dev]
 ```
 
-## Quick Start (Async/Trio)
+## Quick Start (Async)
 
 ```python
-import trio
+import asyncio
 from bulkman import Bulkhead, BulkheadConfig
 
 async def main():
@@ -23,6 +23,7 @@ async def main():
         name="api_calls",
         max_concurrent_calls=5,
         timeout_seconds=10.0,
+        # circuit breaker is OFF by default; opt in explicitly
         circuit_breaker_enabled=True,
     )
     bulkhead = Bulkhead(config)
@@ -35,8 +36,10 @@ async def main():
     else:
         print(f"Error: {result.error}")
 
-trio.run(main)
+asyncio.run(main)
 ```
+
+The async API runs on the `asyncio` event loop (AnyIO-based).
 
 ## Advanced Usage
 
@@ -61,7 +64,7 @@ result = await query_database("SELECT * FROM users")
 ### Managing Multiple Bulkheads
 
 ```python
-import trio
+import asyncio
 from bulkman import BulkheadManager, BulkheadConfig
 
 async def main():
@@ -85,7 +88,7 @@ async def main():
     health = await manager.get_health_status()
     print(health)  # {'database': True, 'external_api': True}
 
-trio.run(main)
+asyncio.run(main)
 ```
 
 ## Configuration
@@ -98,13 +101,13 @@ from bulkman import BulkheadConfig
 config = BulkheadConfig(
     name="my_bulkhead",              # Unique name for the bulkhead
     max_concurrent_calls=10,         # Max concurrent executions
-    max_queue_size=100,              # Max queued tasks (currently for reference)
+    max_queue_size=100,              # Max tasks admitted beyond concurrent (capacity = max_concurrent_calls + max_queue_size; excess raises BulkheadFullError)
     timeout_seconds=30.0,            # Execution timeout in seconds
     failure_threshold=5,             # Failures before circuit opens
     success_threshold=3,             # Successes to close circuit
     isolation_duration=30.0,         # Seconds circuit stays open
-    circuit_breaker_enabled=True,    # Enable/disable circuit breaker
-    health_check_interval=5.0,       # Health check interval (for reference)
+    circuit_breaker_enabled=False,   # Circuit breaker is OFF by default - opt in
+    health_check_interval=5.0,       # Reserved; not used by the current implementations
 )
 ```
 
@@ -123,6 +126,8 @@ config = BulkheadConfig(
     name="external_service",
     failure_threshold=3,
     isolation_duration=60.0,
+    # Circuit breaker is OFF by default - enable it explicitly
+    circuit_breaker_enabled=True,
 )
 
 bulkhead = Bulkhead(config, circuit_storage=storage)

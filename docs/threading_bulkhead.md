@@ -1,8 +1,8 @@
 # BulkheadThreading: Enterprise-Grade Synchronous Bulkhead
 
-`BulkheadThreading` is a high-performance, purely threading-based implementation of the Bulkhead pattern, designed specifically for synchronous, mission-critical workloads where `async`/`await` (Trio/asyncio) is not used.
+`BulkheadThreading` is a high-performance, purely threading-based implementation of the Bulkhead pattern, designed specifically for synchronous, mission-critical workloads where `async`/`await` (asyncio) is not used.
 
-Unlike the standard `Bulkhead` (which relies on Trio), `BulkheadThreading` uses native Python threading primitives to provide **zero-overhead** concurrency limiting and **leak-proof** resource management.
+Unlike the standard `Bulkhead` (which runs on AnyIO/asyncio), `BulkheadThreading` uses native Python threading primitives to provide **zero-overhead** concurrency limiting and **leak-proof** resource management.
 
 ## Key Features
 
@@ -97,11 +97,11 @@ bulkhead.shutdown(wait=False)
 
 | Feature | Bulkhead (Standard) | BulkheadThreading |
 |---------|---------------------|-------------------|
-| **Base Technology** | Trio (Async) | `concurrent.futures` (Threads) |
+| **Base Technology** | AnyIO (asyncio) | `concurrent.futures` (Threads) |
 | **Workload Type** | Async/Await (IO-bound) | Synchronous (Blocking IO / CPU) |
 | **Overhead** | Low (Coroutines) | Medium (OS Threads) |
 | **Context Switching** | Cooperative | Preemptive |
-| **Use Case** | FastAPI, Trio apps, High-concurrency IO | Flask, Django, Legacy scripts, CPU-bound tasks |
+| **Use Case** | FastAPI, any asyncio app, High-concurrency IO | Flask, Django, Legacy scripts, CPU-bound tasks |
 
 ## Certification
 
