@@ -19,6 +19,7 @@ from bulkman import (
     BulkheadConfig,
     BulkheadError,
     BulkheadFullError,
+    BulkheadShutdownError,
     BulkheadState,
     BulkheadThreading,
     BulkheadTimeoutError,
@@ -194,16 +195,16 @@ class TestAsyncShutdown:
         await bulkhead.shutdown()  # second call must not raise
 
     async def test_execute_after_shutdown(self):
-        """Shutdown is terminal: execute() raises RuntimeError afterwards."""
+        """Shutdown is terminal: execute() raises a typed BulkheadError."""
         bulkhead = Bulkhead(BulkheadConfig(name="shutdown2", circuit_breaker_enabled=True))
         await bulkhead.shutdown()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(BulkheadShutdownError):
             await bulkhead.execute(lambda: 7)
 
         async def async_func():
             return 7
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(BulkheadShutdownError):
             await bulkhead.execute(async_func)
 
 
@@ -220,7 +221,7 @@ class TestSyncBridgeShutdown:
     def test_execute_after_shutdown_raises(self):
         bulkhead = BulkheadSync(BulkheadConfig(name="sb_shutdown2", circuit_breaker_enabled=False))
         bulkhead.shutdown()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(BulkheadShutdownError):
             bulkhead.execute(lambda: 1)
 
 
@@ -565,6 +566,20 @@ class TestRound3StressAccounting:
                 nursery.start_soon(_stress_run_one, bulkhead, rng, i)
 
         _assert_stress_consistent(await bulkhead.get_stats())
+
+
+class TestBulkheadShutdownError:
+    """The typed shutdown error must be distinguishable from task errors."""
+
+    def test_is_a_bulkhead_error(self):
+        assert issubclass(BulkheadShutdownError, BulkheadError)
+        assert not issubclass(BulkheadShutdownError, RuntimeError)
+
+    def test_threading_execute_after_shutdown_is_typed(self):
+        bulkhead = BulkheadThreading(BulkheadConfig(name="sd_err_t", circuit_breaker_enabled=False))
+        bulkhead.shutdown(wait=False)
+        with pytest.raises(BulkheadShutdownError):
+            bulkhead.execute(lambda: 1)
 
 
 class TestRound4TimeoutStormAndHalfOpen:

@@ -20,13 +20,14 @@ from bulkman.exceptions import (
     BulkheadError,
     BulkheadFullError,
     BulkheadIsolationError,
+    BulkheadShutdownError,
     BulkheadTimeoutError,
 )
 from bulkman.state import BulkheadState
 from bulkman.sync_bridge import BulkheadSync
 from bulkman.threading import BulkheadThreading
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 __all__ = [
     # Core implementations
@@ -43,5 +44,6 @@ __all__ = [
     "BulkheadCircuitOpenError",
     "BulkheadFullError",
     "BulkheadIsolationError",
+    "BulkheadShutdownError",
     "BulkheadTimeoutError",
 ]

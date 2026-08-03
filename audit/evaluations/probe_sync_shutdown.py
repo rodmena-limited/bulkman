@@ -14,6 +14,7 @@ FAILS on bulkman <=1.2.2. PASSES on the fixed version.
 import sys
 
 from bulkman import BulkheadConfig
+from bulkman.exceptions import BulkheadShutdownError
 from bulkman.sync_bridge import BulkheadSync
 
 
@@ -34,9 +35,9 @@ def main() -> int:
 
     try:
         bulkhead.execute(lambda: 1)
-        print("FAIL: execute() after shutdown should raise (executor closed)")
+        print("FAIL: execute() after shutdown should raise BulkheadShutdownError")
         return 1
-    except RuntimeError:
+    except BulkheadShutdownError:
         pass
 
     print("PASS: BulkheadSync.shutdown() works, is idempotent, closes executor")

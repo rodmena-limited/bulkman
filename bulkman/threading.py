@@ -46,6 +46,7 @@ from bulkman.exceptions import (
     BulkheadCircuitOpenError,
     BulkheadError,
     BulkheadFullError,
+    BulkheadShutdownError,
     BulkheadTimeoutError,
 )
 from bulkman.state import BulkheadState
@@ -126,6 +127,7 @@ class BulkheadThreading:
         # This includes both executing tasks and queued tasks
         self._in_flight_count = 0
         self._in_flight_lock = threading.Lock()
+        self._shutdown = False
         # Futures of admitted tasks, so shutdown(wait=True, timeout=...) can
         # honor the timeout instead of blocking until every task finishes.
         self._futures: set[Future[ExecutionResult]] = set()
@@ -276,6 +278,9 @@ class BulkheadThreading:
         # Check circuit breaker first
         self._check_circuit()
 
+        if self._shutdown:
+            raise BulkheadShutdownError(f"BulkheadThreading '{self.name}' is shut down")
+
         # Prepare context and metadata BEFORE checking queue capacity.
         # This prevents a leak where we increment capacity but then fail to
         # submit due to an error in uuid/context creation.
@@ -314,6 +319,11 @@ class BulkheadThreading:
                 self._futures.add(future)
             future.add_done_callback(self._decrement_in_flight)
             return future
+        except RuntimeError as e:
+            # Submit raced with shutdown(): typed, so callers can distinguish
+            # it from a task's own RuntimeError.
+            self._decrement_in_flight()
+            raise BulkheadShutdownError(f"BulkheadThreading '{self.name}' is shut down") from e
         except BaseException:
             # Catch BaseException to include KeyboardInterrupt and SystemExit.
             # If submission fails, we must decrement the count we incremented
@@ -556,6 +566,7 @@ class BulkheadThreading:
                     wait = False
 
         self._executor.shutdown(wait=wait, cancel_futures=not wait)
+        self._shutdown = True
 
         # Break potential reference cycles
         with self._circuit_lock:

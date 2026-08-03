@@ -30,6 +30,7 @@ from bulkman.exceptions import (
     BulkheadCircuitOpenError,
     BulkheadError,
     BulkheadFullError,
+    BulkheadShutdownError,
     BulkheadTimeoutError,
 )
 from bulkman.state import BulkheadState
@@ -234,8 +235,8 @@ class Bulkhead:
         unsafe - it wraps the raw backend primitive, which is not
         thread-safe (asyncio.Event.set() mutates loop waiters).
         """
-        future = self._sync_executor.submit(func, *args, **kwargs)
         try:
+            future = self._sync_executor.submit(func, *args, **kwargs)
             if sniffio.current_async_library() == "asyncio":
                 await asyncio.wrap_future(future)
             else:
@@ -246,6 +247,10 @@ class Bulkhead:
         except BaseException as e:
             if isinstance(e, anyio.get_cancelled_exc_class()):
                 raise
+            if isinstance(e, RuntimeError) and self._shutdown:
+                # Submit raced with shutdown(): typed, so callers can
+                # distinguish it from a task's own RuntimeError.
+                raise BulkheadShutdownError(f"Bulkhead '{self.name}' is shut down") from e
             # A BaseException from a worker thread (e.g. KeyboardInterrupt)
             # must not masquerade as the caller's interrupt: converting it
             # also keeps the portal in BulkheadSync alive (anyio re-raises
@@ -369,7 +374,7 @@ class Bulkhead:
         await self._check_circuit()
 
         if self._shutdown:
-            raise RuntimeError(f"Bulkhead '{self.name}' is shut down")
+            raise BulkheadShutdownError(f"Bulkhead '{self.name}' is shut down")
 
         submission_time = time.monotonic()
         execution_id = str(uuid.uuid4())

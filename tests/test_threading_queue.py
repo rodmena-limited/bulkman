@@ -6,7 +6,7 @@ import time
 import pytest
 
 from bulkman import BulkheadConfig, BulkheadThreading
-from bulkman.exceptions import BulkheadTimeoutError
+from bulkman.exceptions import BulkheadShutdownError, BulkheadTimeoutError
 
 
 class TestBulkheadThreadingQueue:
@@ -66,8 +66,8 @@ class TestBulkheadThreadingQueue:
         # Shutdown the bulkhead/executor
         bulkhead.shutdown(wait=False)
 
-        # Try to submit - should fail (RuntimeError from executor)
-        with pytest.raises(RuntimeError):
+        # Try to submit - should fail with the typed shutdown error
+        with pytest.raises(BulkheadShutdownError):
             _ = bulkhead.execute(lambda: None)
 
         # Verify in_flight_count is back to 0

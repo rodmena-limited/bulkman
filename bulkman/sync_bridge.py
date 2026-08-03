@@ -21,7 +21,7 @@ from resilient_circuit.storage import CircuitBreakerStorage
 
 from bulkman.config import BulkheadConfig, ExecutionResult
 from bulkman.core import Bulkhead
-from bulkman.exceptions import BulkheadError, BulkheadFullError
+from bulkman.exceptions import BulkheadError, BulkheadFullError, BulkheadShutdownError
 
 logger = logging.getLogger("bulkman.sync")
 
@@ -131,6 +131,7 @@ class BulkheadSync:
         # (both executing and queued).
         self._in_flight_count = 0
         self._in_flight_lock = threading.Lock()
+        self._shutdown = False
         # Work futures tracked so shutdown(wait=True, timeout=...) can honor
         # the timeout, and so cancellation by the executor still releases
         # the admitted slot.
@@ -159,6 +160,9 @@ class BulkheadSync:
         Raises:
             BulkheadFullError: If the bulkhead is at capacity
         """
+        if self._shutdown:
+            raise BulkheadShutdownError(f"BulkheadSync '{self.name}' is shut down")
+
         # Reject when at capacity (max_concurrent_calls + max_queue_size)
         total_capacity = self.config.max_concurrent_calls + self.config.max_queue_size
         with self._in_flight_lock:
@@ -203,6 +207,12 @@ class BulkheadSync:
             with self._work_futures_lock:
                 self._work_futures.add(work_future)
             work_future.add_done_callback(self._on_work_done)
+        except RuntimeError as e:
+            # Submit raced with shutdown(): typed, so callers can distinguish
+            # it from a task's own RuntimeError.
+            with self._in_flight_lock:
+                self._in_flight_count -= 1
+            raise BulkheadShutdownError(f"BulkheadSync '{self.name}' is shut down") from e
         except BaseException:
             # Submission failed (e.g. executor shut down): release the slot
             with self._in_flight_lock:
@@ -290,3 +300,4 @@ class BulkheadSync:
                         )
                         wait = False
             self._executor.shutdown(wait=wait, cancel_futures=not wait)
+            self._shutdown = True
