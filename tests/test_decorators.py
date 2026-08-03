@@ -1,7 +1,7 @@
 """Tests for decorator functionality."""
 
+import anyio
 import pytest
-import trio
 
 from bulkman import Bulkhead, BulkheadConfig, BulkheadError
 from bulkman.core import with_bulkhead
@@ -29,7 +29,7 @@ class TestWithBulkheadDecorator:
 
         @with_bulkhead(bulkhead)
         async def slow_multiply(x: int, y: int) -> int:
-            await trio.sleep(0.01)
+            await anyio.sleep(0.01)
             return x * y
 
         result = await slow_multiply(4, 5)
@@ -80,11 +80,11 @@ class TestWithBulkheadDecorator:
             nonlocal concurrent_count, max_concurrent
             concurrent_count += 1
             max_concurrent = max(max_concurrent, concurrent_count)
-            await trio.sleep(0.1)
+            await anyio.sleep(0.1)
             concurrent_count -= 1
             return "done"
 
-        async with trio.open_nursery() as nursery:
+        async with anyio.create_task_group() as nursery:
             for _ in range(5):
                 nursery.start_soon(slow_func)
 

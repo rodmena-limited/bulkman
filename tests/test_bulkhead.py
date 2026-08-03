@@ -1,7 +1,7 @@
 """Tests for the Bulkhead class."""
 
+import anyio
 import pytest
-import trio
 
 from bulkman import (
     Bulkhead,
@@ -44,7 +44,7 @@ class TestBulkheadBasics:
         bulkhead = Bulkhead(config)
 
         async def async_func(x: int, y: int) -> int:
-            await trio.sleep(0.01)
+            await anyio.sleep(0.01)
             return x * y
 
         result = await bulkhead.execute(async_func, 4, 5)
@@ -82,11 +82,11 @@ class TestBulkheadBasics:
             nonlocal execution_count, max_concurrent
             execution_count += 1
             max_concurrent = max(max_concurrent, execution_count)
-            await trio.sleep(0.1)
+            await anyio.sleep(0.1)
             execution_count -= 1
             return "done"
 
-        async with trio.open_nursery() as nursery:
+        async with anyio.create_task_group() as nursery:
             for _ in range(5):
                 nursery.start_soon(bulkhead.execute, slow_func)
 
@@ -105,7 +105,7 @@ class TestBulkheadBasics:
         bulkhead = Bulkhead(config)
 
         async def slow_func():
-            await trio.sleep(1.0)
+            await anyio.sleep(1.0)
             return "done"
 
         with pytest.raises(BulkheadTimeoutError):
@@ -250,7 +250,7 @@ class TestBulkheadCircuitBreaker:
             _ = await bulkhead.execute(failing_func)
 
         # Wait for cooldown period
-        await trio.sleep(0.25)
+        await anyio.sleep(0.25)
 
         # After cooldown, circuit should allow test requests (half-open/degraded)
         # This should succeed without raising BulkheadCircuitOpenError
@@ -283,7 +283,7 @@ class TestBulkheadCircuitBreaker:
             _ = await bulkhead.execute(lambda: 42)
 
         # Wait for cooldown period
-        await trio.sleep(0.25)
+        await anyio.sleep(0.25)
 
         # Execute successful calls after cooldown
         result3 = await bulkhead.execute(lambda: 42)
@@ -309,7 +309,7 @@ class TestBulkheadConcurrency:
         bulkhead = Bulkhead(config)
 
         async def task(n: int) -> int:
-            await trio.sleep(0.01)
+            await anyio.sleep(0.01)
             return n * 2
 
         results: list[ExecutionResult] = []
@@ -318,7 +318,7 @@ class TestBulkheadConcurrency:
             result = await bulkhead.execute(task, i)
             results.append(result)
 
-        async with trio.open_nursery() as nursery:
+        async with anyio.create_task_group() as nursery:
             for i in range(20):
                 nursery.start_soon(execute_and_collect, i)
 

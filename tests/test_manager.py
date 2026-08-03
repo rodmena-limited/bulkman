@@ -1,10 +1,9 @@
 """Tests for the BulkheadManager class."""
 
+import anyio
 import pytest
-import trio
 
 from bulkman import BulkheadConfig, BulkheadManager
-from bulkman.config import ExecutionResult
 
 
 class TestBulkheadManager:
@@ -28,10 +27,10 @@ class TestBulkheadManager:
         manager = BulkheadManager()
         config = BulkheadConfig(name="test1", circuit_breaker_enabled=False)
 
-        _ = await manager.create_bulkhead(config)
+        await manager.create_bulkhead(config)
 
         with pytest.raises(ValueError, match="already exists"):
-            _ = await manager.create_bulkhead(config)
+            await manager.create_bulkhead(config)
 
     async def test_get_bulkhead(self):
         """Test getting an existing bulkhead."""
@@ -71,7 +70,7 @@ class TestBulkheadManager:
         """Test executing function through named bulkhead."""
         manager = BulkheadManager()
         config = BulkheadConfig(name="test1", circuit_breaker_enabled=False)
-        _ = await manager.create_bulkhead(config)
+        await manager.create_bulkhead(config)
 
         result = await manager.execute_in_bulkhead("test1", lambda: 42)
         assert result.success is True
@@ -82,7 +81,7 @@ class TestBulkheadManager:
         manager = BulkheadManager()
 
         with pytest.raises(ValueError, match="not found"):
-            _ = await manager.execute_in_bulkhead("nonexistent", lambda: 42)
+            await manager.execute_in_bulkhead("nonexistent", lambda: 42)
 
     async def test_get_all_stats(self):
         """Test getting stats for all bulkheads."""
@@ -91,12 +90,12 @@ class TestBulkheadManager:
         config1 = BulkheadConfig(name="bulkhead1", circuit_breaker_enabled=False)
         config2 = BulkheadConfig(name="bulkhead2", circuit_breaker_enabled=False)
 
-        _ = await manager.create_bulkhead(config1)
-        _ = await manager.create_bulkhead(config2)
+        await manager.create_bulkhead(config1)
+        await manager.create_bulkhead(config2)
 
         # Execute some operations
-        _ = await manager.execute_in_bulkhead("bulkhead1", lambda: 1)
-        _ = await manager.execute_in_bulkhead("bulkhead2", lambda: 2)
+        await manager.execute_in_bulkhead("bulkhead1", lambda: 1)
+        await manager.execute_in_bulkhead("bulkhead2", lambda: 2)
 
         stats = await manager.get_all_stats()
         assert "bulkhead1" in stats
@@ -111,8 +110,8 @@ class TestBulkheadManager:
         config1 = BulkheadConfig(name="bulkhead1", circuit_breaker_enabled=False)
         config2 = BulkheadConfig(name="bulkhead2", circuit_breaker_enabled=False)
 
-        _ = await manager.create_bulkhead(config1)
-        _ = await manager.create_bulkhead(config2)
+        await manager.create_bulkhead(config1)
+        await manager.create_bulkhead(config2)
 
         health = await manager.get_health_status()
         assert health["bulkhead1"] is True
@@ -143,25 +142,25 @@ class TestBulkheadManager:
             circuit_breaker_enabled=False,
         )
 
-        _ = await manager.create_bulkhead(config1)
-        _ = await manager.create_bulkhead(config2)
+        await manager.create_bulkhead(config1)
+        await manager.create_bulkhead(config2)
 
-        fast_completed: list[ExecutionResult] = []
-        slow_completed: list[ExecutionResult] = []
+        fast_completed = []
+        slow_completed = []
 
-        async def fast_task() -> None:
+        async def fast_task():
             result = await manager.execute_in_bulkhead("fast", lambda: "fast")
             fast_completed.append(result)
 
-        async def slow_task() -> None:
-            async def slow_func() -> str:
-                await trio.sleep(0.1)
+        async def slow_task():
+            async def slow_func():
+                await anyio.sleep(0.1)
                 return "slow"
 
             result = await manager.execute_in_bulkhead("slow", slow_func)
             slow_completed.append(result)
 
-        async with trio.open_nursery() as nursery:
+        async with anyio.create_task_group() as nursery:
             # Start slow tasks
             for _ in range(3):
                 nursery.start_soon(slow_task)
