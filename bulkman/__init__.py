@@ -5,8 +5,8 @@ A robust implementation of the Bulkhead pattern for isolating resources
 and preventing cascading failures in distributed systems.
 
 Provides three implementations:
-- Bulkhead: Async implementation using Trio (for async workloads)
-- BulkheadSync: Sync wrapper around async Bulkhead via Trio thread
+- Bulkhead: Async implementation using AnyIO (asyncio)
+- BulkheadSync: Sync wrapper around async Bulkhead via a background AnyIO loop
 - BulkheadThreading: Pure threading implementation (for sync workloads, recommended)
 
 For sync workloads, prefer BulkheadThreading over BulkheadSync for simpler
@@ -26,7 +26,7 @@ from bulkman.state import BulkheadState
 from bulkman.sync_bridge import BulkheadSync
 from bulkman.threading import BulkheadThreading
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 
 __all__ = [
     # Core implementations

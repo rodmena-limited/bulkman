@@ -3,3 +3,5 @@ include LICENSE
 include pyproject.toml
 recursive-include bulkman *.py
 recursive-include tests *.py
+recursive-include bulkman *.pyi
+recursive-include bulkman py.typed

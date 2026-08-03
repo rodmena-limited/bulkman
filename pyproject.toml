@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bulkman"
-version = "1.2.1"
-description = "Bulkhead pattern implementation with Trio for structured concurrency and resilient circuit breaking"
+version = "2.0.0"
+description = "Bulkhead pattern implementation with AnyIO (asyncio) and resilient circuit breaking"
 readme = "README.md"
 license = "Apache-2.0"
 authors = [
@@ -20,24 +20,30 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Distributed Computing",
     "Topic :: System :: Networking",
-    "Framework :: Trio",
+    "Framework :: AsyncIO",
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "trio>=0.22.0",
-    "resilient-circuit[postgres]>=0.4.6",
+    "anyio>=4.0.0",
+    "sniffio>=1.1.0",
+    # bulkman uses resilient_circuit's policy internals (_status); pin the
+    # major version so private API changes cannot silently break at install.
+    "resilient-circuit[postgres]>=0.4.6,<0.5",
 ]
 
 [project.optional-dependencies]
+# pytest-anyio runs the async tests on the asyncio backend.
 dev = [
+    "anyio>=4.0.0",
     "black>=23.0.0",
     "isort>=5.0.0",
     "mypy>=1.0.0",
     "pytest>=7.0.0",
-    "pytest-trio>=0.8.0",
+    "pytest-anyio>=0.0.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.0.0",
     "ruff>=0.1.0",
@@ -107,7 +113,8 @@ addopts = [
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-trio_mode = true
+# Run every async test through anyio (asyncio backend, see conftest fixture)
+anyio_mode = "auto"
 
 [tool.mypy]
 python_version = "3.12"
@@ -116,6 +123,9 @@ ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unused_configs = true
+# Installed third-party packages (anyio, pytest) use 3.10+ syntax that mypy
+# rejects under the 3.9 target; bulkman itself is checked with them as Any.
+follow_imports = "skip"
 
 [tool.basedpyright]
 pythonVersion = "3.12"
