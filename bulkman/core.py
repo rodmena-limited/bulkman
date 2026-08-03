@@ -12,6 +12,7 @@ import logging
 import threading
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from fractions import Fraction
@@ -126,8 +127,10 @@ class Bulkhead:
         self._stats_lock = threading.Lock()
 
         logger.info(
-            f"Bulkhead '{self.name}' initialized with {config.max_concurrent_calls} "
-            f"concurrent calls and queue size {config.max_queue_size}"
+            "Bulkhead '%s' initialized with %d concurrent calls and queue size %d",
+            self.name,
+            config.max_concurrent_calls,
+            config.max_queue_size,
         )
 
     def _on_circuit_status_change(
@@ -138,7 +141,10 @@ class Bulkhead:
     ) -> None:
         """Callback for circuit breaker status changes."""
         logger.info(
-            f"Bulkhead '{self.name}' circuit breaker changed: {old_status.value} -> {new_status.value}"
+            "Bulkhead '%s' circuit breaker changed: %s -> %s",
+            self.name,
+            old_status.value,
+            new_status.value,
         )
 
     async def _check_circuit(self) -> None:
@@ -197,7 +203,7 @@ class Bulkhead:
                 breaker._status.mark_success()
                 self._persist_circuit_state(breaker)
             except Exception as e:
-                logger.warning(f"Failed to mark circuit success: {e}")
+                logger.warning("Failed to mark circuit success: %s", e)
 
     def _mark_failure(self) -> None:
         """Record a failure in the circuit breaker (thread-safe)."""
@@ -209,7 +215,7 @@ class Bulkhead:
                 breaker._status.mark_failure()
                 self._persist_circuit_state(breaker)
             except Exception as e:
-                logger.warning(f"Failed to mark circuit failure: {e}")
+                logger.warning("Failed to mark circuit failure: %s", e)
 
     async def _run_sync(
         self, func: Callable[..., T], args: tuple[Any, ...], kwargs: dict[str, Any]
@@ -233,7 +239,9 @@ class Bulkhead:
             if sniffio.current_async_library() == "asyncio":
                 await asyncio.wrap_future(future)
             else:
-                return await anyio.to_thread.run_sync(future.result, abandon_on_cancel=True)
+                return cast(
+                    T, await anyio.to_thread.run_sync(future.result, abandon_on_cancel=True)
+                )
             return future.result()
         except BaseException as e:
             if isinstance(e, anyio.get_cancelled_exc_class()):
@@ -247,8 +255,8 @@ class Bulkhead:
     async def _invoke(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Run the wrapped function (sync functions run in the thread pool)."""
         if inspect.iscoroutinefunction(func):
-            return await func(*args, **kwargs)
-        return await self._run_sync(func, args, kwargs)
+            return cast(T, await func(*args, **kwargs))
+        return cast(T, await self._run_sync(func, args, kwargs))
 
     async def _run(
         self,
@@ -411,7 +419,7 @@ class Bulkhead:
                 self._in_flight -= 1
 
     @asynccontextmanager
-    async def context(self):
+    async def context(self) -> AsyncIterator[Bulkhead]:
         """
         Context manager for bulkhead operations.
 
@@ -489,7 +497,7 @@ class Bulkhead:
             self._circuit_breaker = None
         self._sync_executor.shutdown(wait=False, cancel_futures=True)
         self._shutdown = True
-        logger.info(f"Bulkhead '{self.name}' shut down")
+        logger.info("Bulkhead '%s' shut down", self.name)
 
 
 class BulkheadManager:
@@ -574,7 +582,7 @@ class BulkheadManager:
             return status
 
     @asynccontextmanager
-    async def context(self):
+    async def context(self) -> AsyncIterator[BulkheadManager]:
         """Context manager for bulkhead manager."""
         yield self
 
@@ -597,7 +605,7 @@ def with_bulkhead(
             result = await bulkhead.execute(func, *args, **kwargs)
             if not result.success:
                 raise result.error or BulkheadError("Execution failed")
-            return result.result
+            return cast(T, result.result)
 
         return cast(Callable[..., Awaitable[T]], wrapper)
 

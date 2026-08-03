@@ -13,7 +13,7 @@ import atexit
 import concurrent.futures
 import logging
 import threading
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import anyio
 from anyio.abc import BlockingPortal
@@ -29,7 +29,7 @@ logger = logging.getLogger("bulkman.sync")
 class PortalThread:
     """Manages a background thread running an AnyIO (asyncio) event loop."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._portal: BlockingPortal | None = None
         self._thread: threading.Thread | None = None
         self._started = threading.Event()
@@ -80,7 +80,7 @@ class PortalThread:
             self._thread = None
             logger.info("Portal runner thread stopped")
 
-    def run_sync(self, async_fn: Callable, *args: Any) -> Any:
+    def run_sync(self, async_fn: Callable[..., Any], *args: Any) -> Any:
         """Run an async function from a sync context."""
         portal = self._portal
         if portal is None:
@@ -116,7 +116,7 @@ class BulkheadSync:
         self,
         config: BulkheadConfig,
         circuit_storage: CircuitBreakerStorage | None = None,
-    ):
+    ) -> None:
         self.config = config
         self.name = config.name
         self._portal_thread = _get_portal_thread()
@@ -134,15 +134,15 @@ class BulkheadSync:
         # Work futures tracked so shutdown(wait=True, timeout=...) can honor
         # the timeout, and so cancellation by the executor still releases
         # the admitted slot.
-        self._work_futures: set[concurrent.futures.Future] = set()
+        self._work_futures: set[concurrent.futures.Future[None]] = set()
         self._work_futures_lock = threading.Lock()
 
         # Create async bulkhead in the portal thread
-        async def create_bulkhead():
+        async def create_bulkhead() -> None:
             self._bulkhead = Bulkhead(config, circuit_storage)
 
         self._portal_thread.run_sync(create_bulkhead)
-        logger.info(f"BulkheadSync '{self.name}' initialized")
+        logger.info("BulkheadSync '%s' initialized", self.name)
 
     def execute(
         self,
@@ -171,13 +171,13 @@ class BulkheadSync:
 
         future: concurrent.futures.Future[ExecutionResult] = concurrent.futures.Future()
 
-        def run_in_executor():
+        def run_in_executor() -> None:
             """Run the function via async bulkhead and set result."""
             bulkhead = self._bulkhead
             assert bulkhead is not None
             try:
                 # Execute via async bulkhead from sync context
-                async def async_wrapper():
+                async def async_wrapper() -> ExecutionResult:
                     return await bulkhead.execute(func, *args, **kwargs)
 
                 execution_result = self._portal_thread.run_sync(async_wrapper)
@@ -210,7 +210,7 @@ class BulkheadSync:
             raise
         return future
 
-    def _on_work_done(self, work_future: concurrent.futures.Future) -> None:
+    def _on_work_done(self, work_future: concurrent.futures.Future[None]) -> None:
         """Release the admitted slot and forget the work future."""
         with self._in_flight_lock:
             if self._in_flight_count > 0:
@@ -223,17 +223,17 @@ class BulkheadSync:
         bulkhead = self._bulkhead
         assert bulkhead is not None
 
-        async def async_get_stats():
+        async def async_get_stats() -> dict[str, Any]:
             return await bulkhead.get_stats()
 
-        return self._portal_thread.run_sync(async_get_stats)
+        return cast(dict[str, Any], self._portal_thread.run_sync(async_get_stats))
 
     def get_state(self) -> Any:
         """Get the current bulkhead state."""
         bulkhead = self._bulkhead
         assert bulkhead is not None
 
-        async def async_get_state():
+        async def async_get_state() -> Any:
             return await bulkhead.get_state()
 
         return self._portal_thread.run_sync(async_get_state)
@@ -243,17 +243,17 @@ class BulkheadSync:
         bulkhead = self._bulkhead
         assert bulkhead is not None
 
-        async def async_is_healthy():
+        async def async_is_healthy() -> bool:
             return await bulkhead.is_healthy()
 
-        return self._portal_thread.run_sync(async_is_healthy)
+        return cast(bool, self._portal_thread.run_sync(async_is_healthy))
 
     def reset_stats(self) -> None:
         """Reset bulkhead statistics."""
         bulkhead = self._bulkhead
         assert bulkhead is not None
 
-        async def async_reset_stats():
+        async def async_reset_stats() -> None:
             await bulkhead.reset_stats()
 
         self._portal_thread.run_sync(async_reset_stats)
@@ -267,7 +267,7 @@ class BulkheadSync:
                      queued tasks are cancelled and running tasks abandoned
         """
 
-        async def async_shutdown():
+        async def async_shutdown() -> None:
             if self._bulkhead:
                 await self._bulkhead.shutdown()
 
