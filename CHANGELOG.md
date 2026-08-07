@@ -2,6 +2,31 @@
 
 All notable changes to bulkman are documented here.
 
+## [2.0.2] - 2026-08-07
+
+### Changed
+
+- **resilient-circuit pin raised to `>=0.5.0,<0.6`.** Upstream fixed the
+  PostgreSQL storage cross-process write race bulkman reported (and mitigated
+  in 2.0.0): `set_state` is now a guarded conditional upsert — a stored OPEN
+  with an unexpired cooldown is immutable to blind writers — and an atomic
+  `update_state` read-modify-write API exists. 0.5.0 also adds distributed
+  admission (peer OPEN honored before executing the protected call).
+  Verified here by re-running the original multiprocess reproduction against
+  the published 0.5.0 wheel on live PostgreSQL.
+- **bulkman keeps its own persistence guard** (`_persist_circuit_state`):
+  upstream's guard cannot protect a stored HALF_OPEN from blind writes (a
+  legitimate recovery close is indistinguishable from a stale writer in a
+  single guarded statement), so bulkman's refusal to persist a locally-CLOSED
+  state over a stored OPEN/HALF_OPEN still covers that window.
+
+### Added
+
+- `audit/evaluations/probe_storage_guarded_setstate.py`: storage-level probe
+  asserting the upstream 0.5.0 contract directly (stale-CLOSED refusal,
+  first-opener-wins `open_until`, recovery unblocked after expiry). Validated
+  red against the pre-fix 0.4.7 wheel before its green was trusted.
+
 ## [2.0.1] - 2026-08-03
 
 ### Fixed
@@ -27,6 +52,16 @@ All notable changes to bulkman are documented here.
   "instant timeout" on the async bulkhead but "no timeout" on the threading one.
 - **`Bulkhead.shutdown()` is terminal**: further `execute()` calls raise
   `RuntimeError`, matching `BulkheadThreading`.
+- **⚠ `failure_threshold` is now honored — before 2.0.0 the circuit opened on
+  the FIRST failure regardless of the configured threshold.** If you ran
+  1.x with `circuit_breaker_enabled=True` and, say, `failure_threshold=5`,
+  your circuit was opening after a single failure (`Fraction(n, n)` reduced
+  to resilient_circuit's "any failure opens" sentinel with a 1-slot window).
+  From 2.0.0 the circuit opens only when at least `failure_threshold - 1` of
+  the last `failure_threshold` calls failed. Upgrading therefore makes your
+  breaker LESS eager to open than what you were actually running — review
+  your thresholds if you had tuned them around the buggy behaviour. Callers
+  with the breaker disabled (the default) are unaffected.
 
 ### Fixed
 
@@ -65,5 +100,6 @@ All notable changes to bulkman are documented here.
 - `audit/evaluations/` contains the reusable probe/fuzz harness (17 probes).
 - EARS specs for each audit round live in `SPECS/`.
 
+[2.0.2]: https://github.com/rodmena-limited/bulkman/releases/tag/v2.0.2
 [2.0.1]: https://github.com/rodmena-limited/bulkman/releases/tag/v2.0.1
 [2.0.0]: https://github.com/rodmena-limited/bulkman/releases/tag/v2.0.0
