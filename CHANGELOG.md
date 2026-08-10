@@ -2,6 +2,20 @@
 
 All notable changes to bulkman are documented here.
 
+## [2.0.3] - 2026-08-10
+
+### Changed
+
+- **resilient-circuit pin widened to `>=0.5.0,<0.8`.** The previous `<0.6`
+  cap made resilient-circuit 0.7.x (which adds `RC_DB_DSN` and the
+  `RC_DB_SSL*` options — the only way to express TLS to the breaker's
+  PostgreSQL storage) unreachable in any project that also installs bulkman.
+  stabilize 0.21.1 widened its own cap to `<0.8` for the same reason; this
+  keeps the two house libraries co-satisfiable and lets a resolver pick
+  resilient-circuit 0.7.0. Verified here by running the full suite against
+  the published 0.7.0 wheel: 154 passed, 3 pre-existing skips. The `_status`
+  policy internals bulkman uses are unchanged in 0.5/0.6/0.7.
+
 ## [2.0.2] - 2026-08-07
 
 ### Changed
