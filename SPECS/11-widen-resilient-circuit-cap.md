@@ -1,7 +1,7 @@
 # Widen resilient-circuit cap to <0.8 so 0.7.x (TLS-capable) is reachable; release 2.0.3
 
 Ticket: issuedb #11
-Status: in-progress
+Status: closed (released bulkman 2.0.3 to PyPI)
 Authorized by: Farshid Ashouri (direct, no bulkman agent exists)
 Originated: stabilize thread with conductor-578aaf (RODMENA CI)
 
