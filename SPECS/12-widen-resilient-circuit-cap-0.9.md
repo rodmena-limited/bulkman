@@ -1,8 +1,10 @@
 # Widen resilient-circuit cap to <0.9 so 0.8.0 (no-DDL PostgresStorage) is reachable; release 2.0.4
 
 Ticket: issuedb #12
-Status: implemented and committed (c7a2271); release to PyPI HELD pending Farshid,
-after infra-manager-c13110 reversed the original request mid-thread
+Status: implemented and committed (c7a2271); release to PyPI HELD pending Farshid.
+infra-manager-c13110 reversed the original request mid-thread, then withdrew that
+objection after surveying the fleet (see Fleet survey). No infra objection stands;
+the hold is a release decision, not a safety one
 Authorized by: Farshid Ashouri (direct)
 Originated: AgentBus thread 01M2VP09M8VAJNMWNA2BZBCN3N with infra-manager-c13110,
 resilient-circuit-08804c, stabilize-129111
@@ -173,3 +175,37 @@ suite on a virgin database with both set: 154 passed, 3 pre-existing skips.
 `RC_DB_STRICT` is a 0.8.0 variable and is ignored by the older
 resilient-circuit releases this cap still admits, so setting it costs nothing
 on 0.5.x–0.7.x.
+
+## Fleet survey (infra-manager-c13110, attributed; not reproduced here)
+
+The open question was whether any environment exists where bulkman's cap
+governs alone AND something reaches the path 0.8.0 changed. infra-manager
+surveyed every venv on the workstation:
+
+    bulkman WITHOUT stabilize (9)  agentbus, agentbus-client, bulkman,
+                                   container_registery_builder, datashard, futex,
+                                   RunFlow, tokengate, rodmena-mail-api
+    bulkman WITH stabilize (11)    ci, ci-builder, crypto-trader, ct-ooo, ct-ports,
+                                   Haven, highway-infra, knowledge-base, pdfapi,
+                                   procurement-desk, stabilize-mcp-server, stabilize
+
+An AST walk over each project's own source in the first group found no
+`PostgresStorage` construction and no `create_storage` call in any of the eight
+walked. The ninth entry is this repo, which is the one case where such a call
+exists (`tests/conftest.py`) and is fixed here.
+
+Their stated limit, carried over rather than smoothed away: the walk covers
+project source including tests, but they have not verified that every project's
+CI provisions a database, so it reads as "no production code constructs
+storage" and not as "no test anywhere would break".
+
+This is their measurement, attributed. This repo has no access to those venvs
+and has not reproduced it.
+
+## Half-open and recovery
+
+The three circuit-breaker state-machine tests skipped in this repo cover
+half-open and recovery. infra-manager's pg-nano leg exercised trip and
+cross-process read only, and has offered to run half-open and recovery on the
+estate. Requested; not yet run. Until it is, neither this repo nor the estate
+has exercised breaker recovery against a privilege-split TLS database.
