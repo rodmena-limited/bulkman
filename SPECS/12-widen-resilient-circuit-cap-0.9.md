@@ -1,10 +1,10 @@
 # Widen resilient-circuit cap to <0.9 so 0.8.0 (no-DDL PostgresStorage) is reachable; release 2.0.4
 
 Ticket: issuedb #12
-Status: implemented and committed (c7a2271); release to PyPI HELD pending Farshid.
-infra-manager-c13110 reversed the original request mid-thread, then withdrew that
-objection after surveying the fleet (see Fleet survey). No infra objection stands;
-the hold is a release decision, not a safety one
+Status: RELEASED. bulkman 2.0.4 published to PyPI 2026-09-19, tag v2.0.4.
+Authorized by Farshid Ashouri. infra-manager-c13110 reversed the original request
+mid-thread, then withdrew that objection after surveying the fleet (see Fleet
+survey); no objection stood at release time
 Authorized by: Farshid Ashouri (direct)
 Originated: AgentBus thread 01M2VP09M8VAJNMWNA2BZBCN3N with infra-manager-c13110,
 resilient-circuit-08804c, stabilize-129111
@@ -209,3 +209,30 @@ half-open and recovery. infra-manager's pg-nano leg exercised trip and
 cross-process read only, and has offered to run half-open and recovery on the
 estate. Requested; not yet run. Until it is, neither this repo nor the estate
 has exercised breaker recovery against a privilege-split TLS database.
+
+## Release verification (the served artifact, not the build)
+
+- PyPI JSON: `info.version` = 2.0.4, `requires_dist` carries
+  `resilient-circuit[postgres]<0.9,>=0.5.0`, both the wheel and the sdist present.
+- Clean venv, `pip install --no-cache-dir bulkman==2.0.4 resilient-circuit==0.8.0`
+  from PyPI: exit 0. Import checked from a directory OUTSIDE this repo so the
+  working tree cannot satisfy it — `bulkman.__version__` 2.0.4 resolving from
+  that venv's site-packages, `resilient_circuit.__version__` 0.8.0,
+  `Bulkhead`/`BulkheadConfig` import, `circuit_breaker_enabled` default False,
+  `success_threshold` default 3.
+- Control, against the PUBLISHED 2.0.4: `pip install --dry-run bulkman==2.0.4
+  stabilize==0.22.0 resilient-circuit==0.8.0` still exits 1, pip naming
+  `stabilize 0.22.0 depends on resilient-circuit<0.8`. The release does not move
+  the estate to 0.8.x; stabilize's bound remains strictly binding wherever
+  stabilize is installed, as designed.
+
+## Known defects at release, both pre-existing and both unfixed
+
+- #13 `success_threshold=1` yields a `failure_threshold`-sized half-open probe
+  window via resilient-circuit's `Fraction(1,1)` sentinel. Unreachable on this
+  estate: no deployment enables the breaker.
+- #14 `BulkheadSync` releases the capacity slot after the caller's Future
+  resolves; 7/25 isolated failures on this release, 4/25 on 2.0.3.
+
+Neither is a regression from this change and neither was fixed by it. Released
+knowingly, recorded here so nobody reads 2.0.4 as a clean bill of health.
