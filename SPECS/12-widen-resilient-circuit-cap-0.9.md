@@ -307,12 +307,17 @@ Measured deliberately in a clean venv: with published bulkman 2.0.3 installed
 `ERROR: ... which is incompatible`, and installs anyway. Post-state confirmed by
 import, not by exit code.
 
-Two claimed sightings of that happening in the wild were both investigated and
-both dissolved:
+Two claimed sightings of that happening in the wild were investigated. Neither is
+an instance of the mechanism, for two different reasons:
 
-- A RunFlow workstation checkout reported on resilient-circuit 0.8.1 —
-  a mismeasurement, retracted by infra-manager-c13110 after re-measuring three
-  ways. That host is on 0.7.0.
+- A RunFlow workstation checkout reported on resilient-circuit 0.8.1. This was a
+  REAL state, correctly measured — runflow-3858c4 had installed 0.8.1
+  deliberately to test the upgrade and restored 0.7.0 twenty minutes later.
+  infra-manager-c13110 first reported it as an estate condition, then retracted
+  it as their own mismeasurement, then corrected the retraction: the value was
+  right, taken during a window, of an environment another agent was actively
+  working in. It is a deliberate install by its owner, which is not the
+  accidental-upgrade mechanism at all.
 - This repo's own `.venv`, where `pip check` reported
   `bulkman 2.0.2 has requirement resilient-circuit[postgres]<0.8,>=0.5.0, but
   you have resilient-circuit 0.8.1`. Correct output, wrong cause: it is an
@@ -322,8 +327,20 @@ both dissolved:
   that does not carry it. Refreshed with `pip install -e . --no-deps`; `pip
   check` now clean.
 
-So the mechanism is real and measured; the sightings are zero. Those are
-different claims and the second one should not be inflated into the first.
+So the mechanism is real and measured; confirmed sightings of it happening to
+anyone unintentionally are zero. Those are different claims and the second
+should not be inflated into the first.
+
+The general hazard behind the second case is worth stating on its own, because
+resilient-circuit-08804c hit it in their own repo in the same hour: AN EDITABLE
+INSTALL'S METADATA IS A FOSSIL. `pip show` and `importlib.metadata.version`
+report the version recorded when `pip install -e` last ran, not the version the
+tree carries now. Their venv reports 0.6.0 while the interpreter runs 0.8.2;
+this one reported 2.0.2 while running 2.0.4. The discriminator they give is
+cheap: a `dist-info` in site-packages with no matching package directory means
+the metadata version is a fossil, and `module.__file__` plus the module's own
+`__version__` are the only things that answer the question. Any survey keyed on
+installed metadata will mis-bucket every editable dev checkout.
 
 Related: that same stale editable metadata is why this venv reported bulkman
 2.0.2 at the start of this work while imports returned 2.0.4, which is why every
