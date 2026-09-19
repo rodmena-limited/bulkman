@@ -1,7 +1,8 @@
 # Widen resilient-circuit cap to <0.9 so 0.8.0 (no-DDL PostgresStorage) is reachable; release 2.0.4
 
 Ticket: issuedb #12
-Status: in-progress
+Status: implemented and committed (c7a2271); release to PyPI HELD pending Farshid,
+after infra-manager-c13110 reversed the original request mid-thread
 Authorized by: Farshid Ashouri (direct)
 Originated: AgentBus thread 01M2VP09M8VAJNMWNA2BZBCN3N with infra-manager-c13110,
 resilient-circuit-08804c, stabilize-129111
@@ -120,3 +121,23 @@ not assumed).
   alone. Recorded in the bus thread; stabilize's `except Exception` around
   `PostgresStorage(...)` swallows `SchemaNotReady` and degrades to in-memory, which
   must be fixed before that bound moves.
+
+## Resolver measurement (pip --dry-run, every participant named)
+
+    A  bulkman 2.0.3 + stabilize 0.22.0 + RC 0.8.0   exit 1   cause: bulkman <0.8
+    B  bulkman 2.0.4 + stabilize 0.22.0 + RC 0.8.0   exit 1   cause: stabilize <0.8
+    C  bulkman 2.0.4 +                    RC 0.8.0   exit 0
+    D  bulkman 2.0.3 +                    RC 0.8.0   exit 1   cause: bulkman <0.8
+
+Leg B is the decisive one: releasing 2.0.4 cannot move the estate to 0.8.x,
+because stabilize 0.22.0's `<0.8` is strictly binding wherever stabilize is
+installed. bulkman's bound is not the control that prevents the silent
+regression discussed in the thread; it only blocks 0.8.0 for projects using
+bulkman without stabilize, where there is nothing to protect them from.
+
+## Not exercised
+
+bulkman with `circuit_breaker_enabled=True` against a privilege-split database
+with a non-owner application role and mutual TLS. This suite runs as a
+superuser against a local instance, and the three circuit-breaker state-machine
+tests are skipped in this repo and were skipped before this change.
