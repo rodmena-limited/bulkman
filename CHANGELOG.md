@@ -2,6 +2,44 @@
 
 All notable changes to bulkman are documented here.
 
+## [2.0.4] - 2026-09-19
+
+### Changed
+
+- **resilient-circuit pin widened to `>=0.5.0,<0.9`.** The previous `<0.8`
+  cap made resilient-circuit 0.8.0 unreachable for any project that installs
+  bulkman. 0.8.0 removes DDL from every `PostgresStorage` runtime path:
+  construction now performs one read-only catalog query and raises
+  `SchemaNotReady` when the schema is missing or drifted, with schema work
+  moved to `resilient-circuit-cli pg-setup` (or `RC_DB_AUTO_CREATE=1`).
+  bulkman never constructs or migrates storage — it is always caller-supplied
+  via `circuit_storage` — so that change lands in caller code, not here.
+  Verified by running the full suite against the published 0.8.0 wheel on live
+  PostgreSQL: 154 passed, 3 pre-existing skips, 93.88% coverage. The `_status`
+  policy internals bulkman uses are unchanged in 0.8.0, and the
+  `CircuitBreakerStorage` abstract method set is identical to 0.7.0's.
+
+### Fixed
+
+- **The PostgreSQL test fixture no longer passes against in-memory storage.**
+  `tests/conftest.py` builds its fixture with `create_storage()`, which
+  degrades to `InMemoryStorage` when the schema is not ready. Under
+  resilient-circuit 0.7.x that degradation was unreachable because storage
+  auto-created its own table; under 0.8.0 it is reachable, and on an
+  unprovisioned database the twelve PostgreSQL-backed tests would have run —
+  and passed — against process-local state without touching PostgreSQL. The
+  fixture now fails with an explanatory message if `create_storage()` returns
+  anything other than `PostgresStorage`. Measured both directions on a virgin
+  database: without the guard the four `test_postgres_integration` tests pass
+  on `InMemoryStorage`; with it they error before running.
+- `test.env` sets `RC_DB_AUTO_CREATE=1` so the suite provisions its own schema
+  on a fresh database, as it did implicitly before 0.8.0.
+
+### Documentation
+
+- `docs/user_guide.md` documents schema provisioning for resilient-circuit
+  0.8.0 and the `RC_DB_STRICT` / `RC_DB_AUTO_CREATE` switches.
+
 ## [2.0.3] - 2026-08-10
 
 ### Changed

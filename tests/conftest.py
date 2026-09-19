@@ -39,8 +39,16 @@ def postgres_connection_params() -> dict[str, Any]:
 @pytest.fixture
 def postgres_storage(postgres_connection_params: dict[str, Any]) -> Any:
     """Create PostgreSQL storage for circuit breaker tests."""
-    # Create storage with namespace
     storage = create_storage(namespace="bulkman_test")
+    if type(storage).__name__ != "PostgresStorage":
+        pytest.fail(
+            "RC_DB_* is configured but create_storage() returned "
+            f"{type(storage).__name__} instead of PostgresStorage. "
+            "These tests would run against process-local state and pass "
+            "without exercising PostgreSQL. Provision the schema with "
+            "`resilient-circuit-cli pg-setup --grant-to <role>` or set "
+            "RC_DB_AUTO_CREATE=1."
+        )
 
     # Clean up any existing state from previous test runs
     import psycopg

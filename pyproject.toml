@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bulkman"
-version = "2.0.3"
+version = "2.0.4"
 description = "Bulkhead pattern implementation with AnyIO (asyncio) and resilient circuit breaking"
 readme = "README.md"
 license = "Apache-2.0"
@@ -33,10 +33,11 @@ dependencies = [
     # bulkman uses resilient_circuit's policy internals (_status); pin the
     # minor version so private API changes cannot silently break at install.
     # >=0.5.0 for the guarded set_state / atomic update_state storage layer
-    # (cross-process write race fixed upstream). Upper bound raised to <0.8
-    # after running this suite against 0.7.0: 154 passed, 3 pre-existing skips.
-    # 0.7.0 adds RC_DB_DSN/TLS config only; the _status internals are unchanged.
-    "resilient-circuit[postgres]>=0.5.0,<0.8",
+    # (cross-process write race fixed upstream). Upper bound raised to <0.9
+    # after running this suite against 0.8.0: 154 passed, 3 pre-existing skips.
+    # 0.8.0 moves schema DDL out of the runtime path; bulkman never constructs
+    # storage, so the change lands in caller code, not here.
+    "resilient-circuit[postgres]>=0.5.0,<0.9",
 ]
 
 [project.optional-dependencies]

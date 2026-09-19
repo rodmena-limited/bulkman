@@ -27,7 +27,7 @@ from bulkman.state import BulkheadState
 from bulkman.sync_bridge import BulkheadSync
 from bulkman.threading import BulkheadThreading
 
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 
 __all__ = [
     # Core implementations

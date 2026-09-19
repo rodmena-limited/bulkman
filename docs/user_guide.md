@@ -133,6 +133,25 @@ config = BulkheadConfig(
 bulkhead = Bulkhead(config, circuit_storage=storage)
 ```
 
+### Provisioning the storage schema
+
+From resilient-circuit 0.8.0 onward, `PostgresStorage` issues no DDL on any
+runtime path. Provision the schema once, as a role that owns the table:
+
+```bash
+resilient-circuit-cli pg-setup --grant-to <application-role>
+```
+
+If the schema is missing or drifted, `create_storage()` logs an error and
+returns an `InMemoryStorage` — circuit state becomes process-local and is no
+longer shared between instances, while the application keeps running. Set
+`RC_DB_STRICT=1` to turn that degradation into an error, or
+`RC_DB_AUTO_CREATE=1` to let the process perform the schema work itself
+(the pre-0.8.0 behaviour).
+
+Storage is always caller-supplied in bulkman; bulkman itself never constructs
+or migrates it.
+
 The circuit breaker has three states:
 - **CLOSED** (Healthy): Normal operation
 - **OPEN** (Isolated): Blocking requests after failures

@@ -209,3 +209,5 @@ __marimo__/
 # Local tooling state
 .issue.db
 .omo/
+.agentbus/
+.claude/settings.local.json
