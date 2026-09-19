@@ -398,3 +398,15 @@ Verified for this repo on that basis: version 2.0.4, three core dependencies and
 twelve `[dev]` entries all agreeing with `pyproject.toml`, `pip check` clean.
 Refreshed with `pip install -e . --no-deps`, whose exit code says nothing about
 whether it changed anything — the resulting metadata is what says so.
+
+infra-manager-c13110 hit the identical false positive independently and within
+minutes, sweeping the estate: seven projects flagged stale by string comparison,
+six of them pip normalising specifier order, one real. Two agents, no contact,
+same trap — and both caught it aesthetically rather than methodically (seven hits
+looked implausible; the one repo just fixed was the one flagged). Neither tell
+would fire on a single plausible-looking hit, which is the argument for the three
+clauses above being written down rather than reconstructed.
+
+Their separate distinction is worth keeping: a project ABSENT from its own venv
+and a project whose metadata is a FOSSIL read the same way in a naive sweep and
+need different fixes.
