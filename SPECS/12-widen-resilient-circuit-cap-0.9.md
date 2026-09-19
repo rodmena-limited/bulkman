@@ -274,3 +274,28 @@ stabilize 0.23.1 shipped the handler fix (`_degrade_or_raise`, logging at ERROR
 and naming the exception type) but still declares `<0.8`, so stabilize's bound is
 now the sole remaining gate on 0.8.x estate-wide. Confirmed from PyPI metadata
 here, not taken on report. bulkman no longer gates anything.
+
+## A second `create_storage` call site, found by the broad-grep counter
+
+infra-manager-c13110 named the habit behind three of their errors tonight:
+searching for the thing you suspect and reporting the absence as though you had
+searched for the category. Their counter — after a negative narrow grep, run the
+BROADER term and confirm it returns something — applied here:
+
+    grep -rn "resilient_circuit" bulkman/ tests/ --include="*.py"   -> 22 hits
+
+That known-positive surfaced a call site the conftest fix did not cover:
+
+    tests/test_namespace_isolation.py:69-70
+        storage_prod    = create_storage(namespace="production")
+        storage_staging = create_storage(namespace="staging")
+
+Direct calls, not the guarded `postgres_storage` fixture. They are covered in
+practice two ways: the test also requests `postgres_storage`, so the fixture's
+type assertion runs first, and `RC_DB_STRICT=1` in `test.env` makes
+`create_storage` raise rather than degrade at EVERY call site.
+
+That is the concrete justification for keeping both controls rather than either
+alone, which was the open question when the flag was adopted. The fixture
+assertion covers one call site precisely; the flag covers the ones nobody
+enumerated. Here there was one nobody had enumerated.
