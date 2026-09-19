@@ -181,6 +181,28 @@ window a single failing probe re-opens the circuit immediately, which is the
 standard half-open semantics. For `success_threshold > 1` the documented
 multi-probe window still applies, which is intended behaviour.
 
+## The failure side was the serious half, and neither party said so at the time
+
+The sentinel was framed throughout as a success-side defect, because
+`success_limit` carries the name and slow recovery was the reported symptom. It
+was not. `use_success` gates the window SIZE, and the window governs both
+directions, so on resilient-circuit < 0.8.2 the `success_threshold=1` column was
+distorted on the failure side too.
+
+Restated from the measurements already in this file: at `failure_threshold=10,
+success_threshold=1`, every cooldown expiry admitted **ten** failing calls into a
+dependency the breaker had already declared broken, before re-opening. That is
+the thing a circuit breaker exists to prevent, on the configuration a team would
+pick for fast recovery with anti-flap. The success-side symptom was slow
+recovery; the failure-side symptom was the breaker not breaking.
+
+(resilient-circuit-08804c described this as nine calls. The harness count is ten
+— it counts every admitted call including the one whose failure re-opens the
+circuit, and all ten reach the downstream. The distinction matters only because
+the number quantifies the harm.)
+
+On 0.8.2 that column is 1: a single failing probe re-opens immediately.
+
 ## Consequence for the dependency floor, NOT acted on
 
 bulkman documents at `config.py:55` that `success_threshold` sizes the half-open
@@ -193,3 +215,9 @@ behaviour, at the cost of dropping 0.5.x–0.8.1 support and requiring a release
 That is an operator decision and no alternatives have been analysed. Recorded
 here so the gap between what bulkman documents and what its floor admits is not
 left implicit.
+
+The case is stronger than first written. The failure-side behaviour above is also
+part of what `config.py:55` implies, and it is likewise only true from 0.8.2. A
+resolver landing on 0.7.0 gives a reader of bulkman's own documentation both the
+slow recovery AND ten failing calls per window into a broken dependency, with the
+documentation describing neither. The cost of raising the floor is unchanged.
