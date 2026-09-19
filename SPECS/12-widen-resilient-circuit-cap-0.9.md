@@ -236,3 +236,31 @@ has exercised breaker recovery against a privilege-split TLS database.
 
 Neither is a regression from this change and neither was fixed by it. Released
 knowingly, recorded here so nobody reads 2.0.4 as a clean bill of health.
+
+## Post-release: resilient-circuit 0.8.1
+
+resilient-circuit 0.8.1 was published shortly after this release. Because the
+cap is `<0.9`, a fresh `pip install bulkman` now resolves **bulkman 2.0.4 +
+resilient-circuit 0.8.1** — verified by dry-run in a clean venv. That is a pair
+nobody had exercised at the moment 2.0.4 was published: the verification on this
+ticket was against 0.8.0.
+
+Run after the fact rather than assumed: full suite against the published 0.8.1
+on a freshly created, unprovisioned database — **154 passed, 3 pre-existing
+skips**. Import provenance asserted in the log (`bulkman` 2.0.4 from the working
+tree, `resilient_circuit` 0.8.1 from site-packages).
+
+The lesson for the cap, not just for this release: a `<0.9` upper bound means
+every future 0.8.x resolves for bulkman users the day it ships, with no action
+here. Widening a cap moves the testing obligation forward in time. Checking the
+new minor after upstream ships it is now part of owning that bound.
+
+## Estate state at release
+
+    bulkman   2.0.4    resilient-circuit[postgres]>=0.5.0,<0.9   published
+    stabilize 0.23.1   resilient-circuit>=0.4.6,<0.8             published
+
+stabilize 0.23.1 shipped the handler fix (`_degrade_or_raise`, logging at ERROR
+and naming the exception type) but still declares `<0.8`, so stabilize's bound is
+now the sole remaining gate on 0.8.x estate-wide. Confirmed from PyPI metadata
+here, not taken on report. bulkman no longer gates anything.
