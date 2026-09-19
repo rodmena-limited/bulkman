@@ -115,3 +115,24 @@ have been analysed.
 state-machine tests, skipped with "Circuit breaker state machine behavior is
 complex - manual testing recommended" since commit d999e34, 2025-12-20. No manual
 testing followed.
+
+## Upstream fix in flight: resilient-circuit 0.8.2
+
+resilient-circuit-08804c reports 0.8.2 built, tested and NOT published, fixing
+the `Fraction(1,1)` sentinel (their issuedb #9). Their measurement, against
+bulkman's own `Fraction(1, success_threshold)` mapping: the `st=1` column of the
+probe matrix goes `2/3/5/10` to `1/1/1/1`, with the other twelve cells unchanged.
+
+If that holds, **R2 of this spec is satisfied by an upstream release with no
+bulkman code change**, and bulkman 2.0.4's `<0.9` cap already admits 0.8.2.
+
+NOT VERIFIED HERE. 0.8.2 is unpublished, so this repo cannot run it. Re-run the
+16-cell matrix against the published artifact before closing this ticket on the
+strength of it — a fix reported is not a fix measured, and the matrix is cheap.
+
+Note the coupling, which is a consequence of our own cap: they chose a PATCH
+number rather than 0.9.0 specifically because bulkman 2.0.4 caps `<0.9`, which
+would have excluded the release from the caller that needs it most. Our upper
+bound is now shaping upstream's version numbering. That is the third consequence
+of widening a cap, after the testing obligation moving forward in time and the
+deploys scheduled in unpinned consumers.
