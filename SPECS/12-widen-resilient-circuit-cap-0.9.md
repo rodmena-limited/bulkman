@@ -255,6 +255,16 @@ every future 0.8.x resolves for bulkman users the day it ships, with no action
 here. Widening a cap moves the testing obligation forward in time. Checking the
 new minor after upstream ships it is now part of owning that bound.
 
+The sharper form, from infra-manager-c13110 four hours after this release:
+**a cap raised in one package is a deploy scheduled in every unpinned consumer.**
+RunFlow declares `resilient-circuit>=0.7.0` with no upper bound and rebuilds its
+venv from scratch on every deploy, so its next green pipeline moves both hosts to
+0.8.1 with nobody deciding it. Before this release the estate could not reach
+0.8.x at all. The upgrade looks safe there — RunFlow constructs no storage, so
+0.8.x's breaking change is unreachable — but safety was not the issue; the issue
+is that the decision stopped being anyone's. The obligation created by widening a
+bound does not stop at the package that widened it.
+
 ## Estate state at release
 
     bulkman   2.0.4    resilient-circuit[postgres]>=0.5.0,<0.9   published
