@@ -1,9 +1,10 @@
 # HALF_OPEN probe window: success_threshold=1 is silently ignored
 
 Ticket: issuedb #13
-Status: measured only. No fix implemented, no approach chosen, not authorized as
-work. SUPERSEDES the earlier framing of this ticket, which was wrong — see
-"Correction" below.
+Status: RESOLVED UPSTREAM in resilient-circuit 0.8.2, verified here against the
+published artifact. No bulkman code change was required; bulkman 2.0.4's `<0.9`
+cap already admits it. SUPERSEDES the earlier framing of this ticket, which was
+wrong — see "Correction" below.
 Originated: AgentBus thread 01M2VP09M8VAJNMWNA2BZBCN3N.
 
 ## Correction to the first version of this spec
@@ -136,3 +137,59 @@ would have excluded the release from the caller that needs it most. Our upper
 bound is now shaping upstream's version numbering. That is the third consequence
 of widening a cap, after the testing obligation moving forward in time and the
 deploys scheduled in unpinned consumers.
+
+## Verified against published resilient-circuit 0.8.2
+
+Re-run as this file instructed — not closed on the upstream report. Same harness
+as the original measurement: real `Bulkhead.execute`, PostgreSQL, genuine
+owner/app split (`rc_circuit_breakers` owned by `bm_owner`, runtime role
+`bm_app` holding only DML, `pg_has_role(bm_app, bm_owner, 'member')` asserted
+false, schema provisioned by `resilient-circuit-cli pg-setup --grant-to bm_app`
+as the owner), every state read back on a third connection as `bm_owner`, OPEN
+asserted before any admission count is reported.
+
+Failures ADMITTED per cooldown window, 0.8.2 (0.8.0 values in brackets where
+they differ):
+
+        st=1      st=2   st=3   st=5
+  ft=2   1 [2]     2      3      5
+  ft=3   1 [3]     2      3      5
+  ft=5   1 [5]     2      3      5
+  ft=10  1 [10]    2      3      5
+
+Successes required to CLOSE:
+
+  ft=2 st=1 -> 1 [2]    ft=3 st=1 -> 1 [3]    ft=5 st=1 -> 1 [5]
+  ft=2 st=2 -> 2        ft=3 st=2 -> 2        ft=5 st=2 -> 2
+
+Trip counts from CLOSED unchanged at 2/3/5/10, so R3 holds.
+
+- **R1 satisfied**: the probe count equals `success_threshold` for every value
+  including 1.
+- **R2 satisfied**: `success_threshold=1` sizes the window at 1 slot and no
+  longer takes it from `failure_threshold`.
+- **R3 satisfied**: `failure_threshold` consecutive failures still open from
+  CLOSED.
+
+Served-artifact provenance: `resilient_circuit.__version__` 0.8.2 resolving from
+site-packages, `CircuitProtectorPolicy.__init__`'s `success_limit` default now
+`None` rather than `Fraction(1,1)`. Full bulkman suite against 0.8.2 on a
+freshly created unprovisioned database: 154 passed, 3 pre-existing skips.
+
+The open design question also resolves for `success_threshold=1`: with a 1-slot
+window a single failing probe re-opens the circuit immediately, which is the
+standard half-open semantics. For `success_threshold > 1` the documented
+multi-probe window still applies, which is intended behaviour.
+
+## Consequence for the dependency floor, NOT acted on
+
+bulkman documents at `config.py:55` that `success_threshold` sizes the half-open
+probe window. That documentation is only TRUE on resilient-circuit >= 0.8.2. The
+current floor is `>=0.5.0`, so a resolver may still install a version on which
+`success_threshold=1` silently means `failure_threshold`.
+
+Raising the floor to `>=0.8.2` would make the declared range match the documented
+behaviour, at the cost of dropping 0.5.x–0.8.1 support and requiring a release.
+That is an operator decision and no alternatives have been analysed. Recorded
+here so the gap between what bulkman documents and what its floor admits is not
+left implicit.
