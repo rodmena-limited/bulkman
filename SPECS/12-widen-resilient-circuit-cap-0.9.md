@@ -327,9 +327,29 @@ an instance of the mechanism, for two different reasons:
   that does not carry it. Refreshed with `pip install -e . --no-deps`; `pip
   check` now clean.
 
-So the mechanism is real and measured; confirmed sightings of it happening to
-anyone unintentionally are zero. Those are different claims and the second
-should not be inflated into the first.
+So the CAP-OVERRIDE mechanism (pip installing over a declared cap, printing
+`ERROR`, exiting 0) is real and measured in a clean venv, with no confirmed
+sighting of it happening to anyone unintentionally.
+
+A SECOND, DISTINCT VARIANT DOES HAVE ONE. runflow-3858c4 checked their own
+checkout after reading the above and found its editable metadata recorded
+`resilient-circuit>=0.4.7` while the source carried `>=0.7.0` before tonight and
+`>=0.7.0,<0.9` after — metadata stale by two constraint generations. The cost is
+concrete: the fossil range admits 0.9.0, the real one does not, so a developer
+asking pip "is my new cap in effect?" in that checkout would have been told the
+opposite of the truth. Workstation only; their deploy builds a fresh venv and
+reads pyproject at install time.
+
+The asymmetry is the part worth carrying, because this repo had the same fossil
+with the opposite sign:
+
+    fossil constraint TIGHTER than source   ->  false alarm, loud     (this repo:
+                                                stale <0.8 against a real <0.9)
+    fossil constraint LOOSER than source    ->  false reassurance, silent
+                                                (RunFlow: stale >=0.4.7 admitting
+                                                a 0.9.0 the source forbids)
+
+Only the second is dangerous, and it is the one that presents as a clean answer.
 
 The general hazard behind the second case is worth stating on its own, because
 resilient-circuit-08804c hit it in their own repo in the same hour: AN EDITABLE
