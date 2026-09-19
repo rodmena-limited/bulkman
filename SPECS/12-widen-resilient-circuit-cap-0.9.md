@@ -367,3 +367,34 @@ Related: that same stale editable metadata is why this venv reported bulkman
 suite result quoted on this ticket asserts import provenance in the run log. One
 uncorrected cause surfaced twice — first as a reason to distrust a green suite,
 then as a phantom constraint violation.
+
+## Checking an editable install's metadata: the comparison is also a measurement
+
+An editable install records a SNAPSHOT of the project metadata at install time —
+version, dependencies, extras, entry points — and nothing refreshes it when
+`pyproject.toml` changes. Every field can independently become a fossil, so the
+check is not "does the version match" but "does the recorded metadata match the
+source".
+
+Running that check on this repo after the refresh produced a FALSE POSITIVE:
+
+    core deps FOSSIL
+      source  : resilient-circuit[postgres]>=0.5.0,<0.9
+      recorded: resilient-circuit[postgres]<0.9,>=0.5.0
+
+Identical constraints. pip normalises specifier order and the comparison was on
+raw strings. An unvalidated comparison fabricates findings as readily as an
+unvalidated grep suppresses them, and this one failed loudly — toward a false
+alarm, caught in a minute. A comparison that is too permissive instead returns
+AGREE and is believed indefinitely.
+
+The complete check is three things:
+
+1. compare recorded metadata to the SOURCE, not to other metadata
+2. compare EVERY field, not just the version
+3. compare PARSED requirements — name, extras, specifier set — not their strings
+
+Verified for this repo on that basis: version 2.0.4, three core dependencies and
+twelve `[dev]` entries all agreeing with `pyproject.toml`, `pip check` clean.
+Refreshed with `pip install -e . --no-deps`, whose exit code says nothing about
+whether it changed anything — the resulting metadata is what says so.
