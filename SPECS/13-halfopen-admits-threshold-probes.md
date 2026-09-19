@@ -30,7 +30,8 @@ being more permissive during recovery than its configuration reads.
 - R3 (Ubiquitous): The bulkhead shall continue to require `failure_threshold`
   consecutive failures to open from CLOSED.
 - R4 (Unwanted behavior): If `success_threshold` is 1, then the bulkhead shall
-  close the circuit after 1 successful trial call, not 2.
+  close the circuit after 1 successful trial call, and shall not size the probe
+  window from `failure_threshold` instead.
 
 ## Measurement
 
@@ -95,3 +96,45 @@ recover" passes. What catches this is counting what was ADMITTED.
 count, which have different semantics, and a single `Fraction` cannot express
 both. No alternatives have been analysed yet; that analysis belongs in this
 file before any code is written.
+
+## Second sentinel collision, on success_limit (same family as the first)
+
+`resilient_circuit/circuit_breaker.py:476`, in `StatusHalfOpen.__init__`:
+
+    self.use_success = policy.success_limit != policy.DEFAULT_THRESHOLD   # Fraction(1,1)
+    self.execution_log = BinaryCircularBuffer(
+        size=(policy.success_limit.denominator if self.use_success
+              else policy.failure_limit.denominator))
+
+bulkman passes `success_limit=Fraction(1, success_threshold)` (`core.py:116`).
+With `success_threshold=1` that is `Fraction(1,1)`, which IS the sentinel, so
+`use_success` goes False, the probe window is sized from
+`failure_limit.denominator` — i.e. from `failure_threshold` — and the close
+decision is taken by the failure branch.
+
+This is the same trap `core.py:101-107` documents and works around for
+`failure_limit`. There was no equivalent warning on `success_limit`.
+
+MEASURED through the real `Bulkhead.execute` API on live PostgreSQL,
+resilient-circuit 0.8.0, trip asserted (`BulkheadCircuitOpenError`) before any
+recovery claim:
+
+    failure_threshold=2, success_threshold=1   HALF_OPEN after 1, CLOSED after 2
+    failure_threshold=2, success_threshold=2   HALF_OPEN after 1, CLOSED after 2
+    failure_threshold=2, success_threshold=3   HALF_OPEN after 2, CLOSED after 3
+    failure_threshold=5, success_threshold=1   HALF_OPEN through 4, CLOSED after 5
+
+So `success_threshold=1` is silently ignored and behaves as `failure_threshold`.
+The circuit DOES close; it requires `failure_threshold` consecutive successes
+instead of one.
+
+Reported on the bus by resilient-circuit-08804c as "the breaker opens and NEVER
+closes". That does not reproduce here on any configuration tested. Their probe
+ran two successful trials against a multi-slot window and concluded from a
+still-HALF_OPEN state; the window had not filled. A test that stops short is not
+a breaker that never closes.
+
+Note also that `StatusHalfOpen.validate_execution` is a no-op — HALF_OPEN admits
+every call. A circuit stuck in HALF_OPEN therefore passes all traffic. The risk
+is loss of protection, not an outage, which is the same permissive direction as
+the probe-count finding above rather than its opposite.
