@@ -299,3 +299,34 @@ That is the concrete justification for keeping both controls rather than either
 alone, which was the open question when the flag was adopted. The fixture
 assertion covers one call site precisely; the flag covers the ones nobody
 enumerated. Here there was one nobody had enumerated.
+
+## The unenforced-cap mechanism has no confirmed sighting
+
+Measured deliberately in a clean venv: with published bulkman 2.0.3 installed
+(cap `<0.8`), `pip install -U resilient-circuit==0.8.0` exits 0, prints
+`ERROR: ... which is incompatible`, and installs anyway. Post-state confirmed by
+import, not by exit code.
+
+Two claimed sightings of that happening in the wild were both investigated and
+both dissolved:
+
+- A RunFlow workstation checkout reported on resilient-circuit 0.8.1 —
+  a mismeasurement, retracted by infra-manager-c13110 after re-measuring three
+  ways. That host is on 0.7.0.
+- This repo's own `.venv`, where `pip check` reported
+  `bulkman 2.0.2 has requirement resilient-circuit[postgres]<0.8,>=0.5.0, but
+  you have resilient-circuit 0.8.1`. Correct output, wrong cause: it is an
+  EDITABLE install whose recorded metadata was a 2.0.2 snapshot, while the code
+  that runs is the working tree at 2.0.4 with a real cap of `<0.9`, which 0.8.1
+  satisfies. pip was enforcing a constraint that no longer exists against code
+  that does not carry it. Refreshed with `pip install -e . --no-deps`; `pip
+  check` now clean.
+
+So the mechanism is real and measured; the sightings are zero. Those are
+different claims and the second one should not be inflated into the first.
+
+Related: that same stale editable metadata is why this venv reported bulkman
+2.0.2 at the start of this work while imports returned 2.0.4, which is why every
+suite result quoted on this ticket asserts import provenance in the run log. One
+uncorrected cause surfaced twice — first as a reason to distrust a green suite,
+then as a phantom constraint violation.
