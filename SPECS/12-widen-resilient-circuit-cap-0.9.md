@@ -141,3 +141,21 @@ bulkman with `circuit_breaker_enabled=True` against a privilege-split database
 with a non-owner application role and mutual TLS. This suite runs as a
 superuser against a local instance, and the three circuit-breaker state-machine
 tests are skipped in this repo and were skipped before this change.
+
+## RC_DB_STRICT (verified independently, not taken on report)
+
+resilient-circuit-08804c pointed out that `RC_DB_STRICT=1` does at the library
+level what the fixture's type assertion does at one call site. Measured here on
+a fresh database per leg, resilient-circuit 0.8.0:
+
+    STRICT unset, AUTO_CREATE off   -> InMemoryStorage returned
+    STRICT=1,     AUTO_CREATE off   -> raises SchemaNotReady
+    STRICT=1,     AUTO_CREATE=1     -> PostgresStorage returned
+
+Both are kept. The flag is global and reaches call sites the fixture does not;
+the assertion is local, explicit, and survives the variable being unset. Full
+suite on a virgin database with both set: 154 passed, 3 pre-existing skips.
+
+`RC_DB_STRICT` is a 0.8.0 variable and is ignored by the older
+resilient-circuit releases this cap still admits, so setting it costs nothing
+on 0.5.x–0.7.x.

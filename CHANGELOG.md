@@ -33,7 +33,13 @@ All notable changes to bulkman are documented here.
   database: without the guard the four `test_postgres_integration` tests pass
   on `InMemoryStorage`; with it they error before running.
 - `test.env` sets `RC_DB_AUTO_CREATE=1` so the suite provisions its own schema
-  on a fresh database, as it did implicitly before 0.8.0.
+  on a fresh database, as it did implicitly before 0.8.0, and `RC_DB_STRICT=1`
+  so any `create_storage()` call site that would degrade to `InMemoryStorage`
+  raises instead. The two compose: auto-create provisions the schema, strict
+  catches the case where provisioning returned without producing a working one.
+  The fixture's type assertion is kept alongside the flag — it is local to the
+  mistake and survives the environment variable being unset, while the flag
+  covers call sites the fixture does not.
 
 ### Documentation
 
