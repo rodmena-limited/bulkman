@@ -135,12 +135,26 @@ installed. bulkman's bound is not the control that prevents the silent
 regression discussed in the thread; it only blocks 0.8.0 for projects using
 bulkman without stabilize, where there is nothing to protect them from.
 
-## Not exercised
+## Not exercised by this repo; run independently by infra-manager-c13110
 
 bulkman with `circuit_breaker_enabled=True` against a privilege-split database
-with a non-owner application role and mutual TLS. This suite runs as a
-superuser against a local instance, and the three circuit-breaker state-machine
-tests are skipped in this repo and were skipped before this change.
+with a non-owner application role and mutual TLS is NOT covered by this suite.
+This suite runs as a superuser against a local instance, and the three
+circuit-breaker state-machine tests are skipped in this repo and were skipped
+before this change.
+
+infra-manager-c13110 reported running that configuration on pg-nano-03
+(PostgreSQL 18 / FreeBSD, estate client CA, `hostssl` with
+`clientcert=verify-full`), with bulkman 2.0.3 and resilient-circuit 0.8.0:
+`pg-setup` as the owner role granting DML to the app role; the breaker tripping
+as the app role and the OPEN row readable from PostgreSQL; the same row read by
+a separate interpreter and independently through `psql`; and `SchemaNotReady`
+raised rather than degraded on a virgin database.
+
+That result is recorded here as THEIR measurement, attributed. It has not been
+reproduced in this repo and this repo has no access to that host, so it is not
+counted as verification performed here. The configuration remains uncovered by
+bulkman's own suite.
 
 ## RC_DB_STRICT (verified independently, not taken on report)
 
