@@ -410,3 +410,31 @@ clauses above being written down rather than reconstructed.
 Their separate distinction is worth keeping: a project ABSENT from its own venv
 and a project whose metadata is a FOSSIL read the same way in a naive sweep and
 need different fixes.
+
+## Standing obligation exercised again: resilient-circuit 0.8.3
+
+Published after this release and admitted by the `<0.9` cap with no action here,
+which is the third time the cap has been exercised by a release that did not
+exist when it was set. Suite run against the published 0.8.3 on a freshly created
+unprovisioned database, import provenance asserted: **154 passed, 3 pre-existing
+skips**.
+
+## The cap is now the estate-wide ceiling
+
+stabilize 0.27.0 declares `bulkman>=2.0.4` and `resilient-circuit>=0.8.2` with no
+upper bound, having removed its own ceiling in 0.26.0 on the reasoning that a cap
+there would be the binding constraint estate-wide. Confirmed from published PyPI
+metadata: with stabilize's ceiling gone, **bulkman's `<0.9` is the binding
+constraint**, one level further down, where the previous investigation was not
+looking.
+
+The cap is held deliberately and the reason is recorded in the Alternatives
+section above: bulkman reads `CircuitProtectorPolicy._status`, a private
+attribute, so a 0.9 minor may change it with no major bump. That reason is
+falsifiable and has a measured price — resilient-circuit numbered their sentinel
+fix 0.8.2 rather than 0.9.0 specifically so this cap would not exclude it.
+
+Nothing is blocked today: resilient-circuit is at 0.8.3. The cap binds the day
+0.9.0 ships, and the decision then is whether the `_status` coupling still
+exists — which is the thing that would have to change for the ceiling to lift
+honestly.
