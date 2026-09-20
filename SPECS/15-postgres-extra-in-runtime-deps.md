@@ -49,8 +49,30 @@ Scope of that leg, so it is not over-read: it exercised import and execute with
 passing a `PostgresStorage` — such a caller needs psycopg regardless and would
 obtain it from `resilient-circuit[postgres]` themselves, which is what R3 is for.
 
+## What the runtime dependency actually pulls
+
+Full transitive closure of a bare `pip install bulkman==2.0.4`, clean venv:
+
+    anyio  bulkman  idna  psycopg  python-dotenv  resilient-circuit
+    sniffio  typing_extensions
+
+So the `[postgres]` extra contributes **psycopg AND python-dotenv** — the latter
+being the less obvious of the two and not mentioned by anyone so far.
+`psycopg-pool` is NOT pulled: resilient-circuit 0.8.3's `postgres` extra is
+`psycopg>=3.1.0` plus `python-dotenv>=1.0.0`, with no pool, and
+`import psycopg_pool` in that venv raises `ModuleNotFoundError`. Anything
+observing psycopg-pool downstream is getting it from its own `psycopg[pool]`,
+not through bulkman.
+
 ## Risk
 
 Any consumer currently relying on bulkman to pull psycopg implicitly breaks on
 upgrade. That is why R3 proposes an extra rather than a bare removal, and why
 this is a release decision rather than a cleanup.
+
+One class of breakage is already ruled out: stabilize 0.27.0 declares
+`psycopg[pool]>=3.0` in its own `postgres` extra, confirmed from published
+metadata, so stabilize's PostgreSQL users never relied on bulkman's implicit
+pull. The exposure is bare-stabilize installs that reach for the PostgreSQL store
+without the extra, which is what `stabilize[postgres]` is already documented
+for.
